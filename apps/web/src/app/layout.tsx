@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "sonner";
+import TonProvider from "@/components/ui/ton-provider";
+import SonnerProvider from "@/components/ui/sonner-provider";
 import { TonConnectUIProvider } from "@tonconnect/ui-react";
 
 export const metadata: Metadata = {
@@ -9,14 +11,13 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const manifestUrl = "/tonconnect-manifest.json";
   return (
     <html lang="en">
       <body>
-        <TonConnectUIProvider manifestUrl={manifestUrl}>
-        {children}
-        <Toaster richColors position="top-center" />
-        </TonConnectUIProvider>
+        <TonProvider>
+          {children}
+          <SonnerProvider />
+        </TonProvider>
       </body>
     </html>
   );

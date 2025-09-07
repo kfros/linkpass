@@ -20,7 +20,7 @@ export default function BuyForm({ pass }: { pass: Pass }) {
   const [orderId, setOrderId] = useState<number | null>(null);
   const [tonConnectUI] = useTonConnectUI();
 
-   async function ensureOrder() {
+  async function createOrder() {
     const cents = Math.round(parseFloat(amountUsd) * 100);
     if (!Number.isFinite(cents) || cents <= 0) {
       toast.error("Enter a valid price");
@@ -35,7 +35,7 @@ export default function BuyForm({ pass }: { pass: Pass }) {
   async function payWithTon() {
     setLoading(true);
     try {
-      const order = await ensureOrder();
+      const order = await createOrder();
       if (!order) return;
 
       // NOTE: Demo amount — 0.05 TON. Replace with real quote later.
@@ -48,7 +48,10 @@ export default function BuyForm({ pass }: { pass: Pass }) {
       });
 
       // result can be string or object; normalize to string for storage
-      const tx = typeof result === "string" ? result : (result?.boc ?? JSON.stringify(result));
+      const tx =
+        typeof result === "string"
+          ? result
+          : (result?.boc ?? JSON.stringify(result));
       await api.orders.updateTx(order.id, "ton", tx);
 
       toast.success(`TON payment submitted! Order #${order.id}`);
@@ -57,8 +60,8 @@ export default function BuyForm({ pass }: { pass: Pass }) {
         e instanceof Error
           ? e.message
           : typeof e === "string"
-          ? e
-          : "TON payment failed";
+            ? e
+            : "TON payment failed";
       toast.error(message);
     } finally {
       setLoading(false);
@@ -121,6 +124,13 @@ export default function BuyForm({ pass }: { pass: Pass }) {
   }
   return (
     <Card className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          Connect your TON wallet
+        </div>
+        <TonConnectButton />
+      </div>
+
       <div className="grid sm:grid-cols-[1fr_auto] gap-3">
         <div>
           <label className="block text-sm text-muted-foreground mb-1">
@@ -136,9 +146,17 @@ export default function BuyForm({ pass }: { pass: Pass }) {
           />
         </div>
         <div className="flex items-end">
-          <Button onClick={placeOrder} disabled={loading}>
-            {loading ? "Processing..." : "Buy now"}
+          <Button
+            onClick={async () => {
+              const o = await createOrder();
+              if (o) toast.success(`Order ${o.id} created for $${amountUsd}`);
+            }}
+          >Create order (no pay)
+
           </Button>
+            <Button onClick={payWithTon} disabled={loading} className="whitespace-nowrap">
+              {loading ? "Processing..." : "Pay with TON"}
+            </Button>
         </div>
       </div>
 

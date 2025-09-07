@@ -34,9 +34,28 @@ const UpdateOrderTx = z.object({
 export async function buildServer() {
   const app = fastify({ logger: true });
   await app.register(cors, {
-    origin: ["http://localhost:3000"],
-    credentials: false,
-  });
+  // Accept localhost and any ngrok-free.app subdomain over http/https
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // curl/Postman/same-origin
+    const ok =
+      origin === 'http://localhost:3000' ||
+      origin === 'https://localhost:3000' ||
+      /^https?:\/\/[a-z0-9-]+\.ngrok-free\.app$/i.test(origin);
+    cb(null, ok);
+  },
+
+  // Be explicit: browsers preflight PATCH with these headers
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
+  exposedHeaders: ['Content-Type'],
+  maxAge: 86400,
+
+  // Handle OPTIONS automatically; don’t fail strict checks in dev
+  preflight: true,
+  strictPreflight: false,
+
+  credentials: false, // keep false unless you use cookies
+});
 
   app.get("/health", async () => {
     return { status: "ok" };
