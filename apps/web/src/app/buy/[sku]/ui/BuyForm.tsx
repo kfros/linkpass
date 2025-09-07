@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
+import { TonConnectButton, useTonConnectUI } from "@tonconnect/ui-react";
 
 // const id = crypto.randomUUID();
 
@@ -16,7 +17,53 @@ import { Card } from "@/components/ui/card";
 export default function BuyForm({ pass }: { pass: Pass }) {
   const [amountUsd, setAmountUsd] = useState("19.99");
   const [loading, setLoading] = useState(false);
-  const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<number | null>(null);
+  const [tonConnectUI] = useTonConnectUI();
+
+   async function ensureOrder() {
+    const cents = Math.round(parseFloat(amountUsd) * 100);
+    if (!Number.isFinite(cents) || cents <= 0) {
+      toast.error("Enter a valid price");
+      return null;
+    }
+    if (orderId) return { id: orderId };
+    const order = await api.orders.create(pass.merchantId, pass.sku, cents);
+    setOrderId(order.id);
+    return order;
+  }
+
+  async function payWithTon() {
+    setLoading(true);
+    try {
+      const order = await ensureOrder();
+      if (!order) return;
+
+      // NOTE: Demo amount — 0.05 TON. Replace with real quote later.
+      const recipient = process.env.NEXT_PUBLIC_TON_RECIPIENT!;
+      const nanotons = BigInt(50_000_000); // 0.05 TON
+
+      const result = await tonConnectUI.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 300,
+        messages: [{ address: recipient, amount: nanotons.toString() }],
+      });
+
+      // result can be string or object; normalize to string for storage
+      const tx = typeof result === "string" ? result : (result?.boc ?? JSON.stringify(result));
+      await api.orders.updateTx(order.id, "ton", tx);
+
+      toast.success(`TON payment submitted! Order #${order.id}`);
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error
+          ? e.message
+          : typeof e === "string"
+          ? e
+          : "TON payment failed";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function placeOrder() {
     setLoading(true);
@@ -36,7 +83,7 @@ export default function BuyForm({ pass }: { pass: Pass }) {
         return;
       }
       const order = await api.orders.create(pass.merchantId, pass.sku, cents);
-      setOrderId(order.id.toString());
+      setOrderId(order.id);
       toast.success(
         `Order ${order.id} created for $${(order.amount / 100).toFixed(2)}`,
         {

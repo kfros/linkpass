@@ -32,5 +32,10 @@ export const api = {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ merchantId, sku, amount }),
         }).then(res => json<Order>(res)),
+
+        updateTx: (id: number, chain: "sol" | "ton", tx: string) : Promise<Order> => fetch(`${API}/orders/${id}`, {
+            method: "PATCH", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chain, tx }),
+        }).then(res => json<Order>(res)),
     }
 };
