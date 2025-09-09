@@ -10,6 +10,8 @@ import {
   orders as tOrders,
 } from "./db/schema";
 
+import { verifyTelegramInitData } from "./telegram/verify";
+
 const CreateMerchant = z.object({
   name: z.string().min(2),
 });
@@ -190,5 +192,22 @@ export async function buildServer() {
     }
     return row;
   });
+
+app.post("/telegram-verify", async (request, reply) => {
+  const { initData } = (request.body ?? {}) as { initData?: string };
+  if (!initData) {
+    return reply.status(400).send({ ok: false, error: "No initData provided" });
+  }
+
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  if (!botToken) {
+    request.log.error("No TELEGRAM_BOT_TOKEN in env");
+    return reply.status(500).send({ ok: false, error: "Server misconfiguration" });
+  }
+
+  const result = verifyTelegramInitData(initData, botToken);
+  return reply.send(result);
+});
+
   return app;
 }

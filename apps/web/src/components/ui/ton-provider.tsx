@@ -9,7 +9,6 @@ export default function TonProvider({ children }: { children: React.ReactNode })
   return (
     
       <TonConnectUIProvider manifestUrl={manifestUrl}>
-      console.log(`Manifest URL:`, manifestUrl)
         {children}
       </TonConnectUIProvider>
     
