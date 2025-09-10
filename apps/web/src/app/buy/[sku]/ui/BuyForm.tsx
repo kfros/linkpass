@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
-import { api, Pass } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
+import type { Pass } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { TonConnectButton, useTonConnectUI } from "@tonconnect/ui-react";
 
 // const id = crypto.randomUUID();
@@ -51,7 +52,7 @@ export default function BuyForm({ pass }: { pass: Pass }) {
       const tx =
         typeof result === "string"
           ? result
-          : (result?.boc ?? JSON.stringify(result));
+          : result?.boc ?? JSON.stringify(result);
       await api.orders.updateTx(order.id, "ton", tx);
 
       toast.success(`TON payment submitted! Order #${order.id}`);
@@ -60,12 +61,30 @@ export default function BuyForm({ pass }: { pass: Pass }) {
         e instanceof Error
           ? e.message
           : typeof e === "string"
-            ? e
-            : "TON payment failed";
+          ? e
+          : "TON payment failed";
       toast.error(message);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function payWithSolana() {
+    // if (orderId === null) {
+    //   toast.error("No order to pay for. Please create an order first.");
+    //   return;
+    // }
+    const order = await createOrder();
+    if (!order) {
+      toast.error("Failed to create order for Solana payment.");
+      return;
+    }
+    const mockSig = `mock-sol-${crypto.randomUUID()}`;
+
+    // IMPORTANT: send a real JSON string as body
+    await api.orders.updateTx(order.id, "sol", mockSig);
+    // show success
+    toast.success(`SOL payment submitted! Order #${order.id}`);
   }
 
   async function placeOrder() {
@@ -151,12 +170,23 @@ export default function BuyForm({ pass }: { pass: Pass }) {
               const o = await createOrder();
               if (o) toast.success(`Order ${o.id} created for $${amountUsd}`);
             }}
-          >Create order (no pay)
-
+          >
+            Create order (no pay)
           </Button>
-            <Button onClick={payWithTon} disabled={loading} className="whitespace-nowrap">
-              {loading ? "Processing..." : "Pay with TON"}
-            </Button>
+          <Button
+            onClick={payWithTon}
+            disabled={loading}
+            className="whitespace-nowrap"
+          >
+            {loading ? "Processing..." : "Pay with TON"}
+          </Button>
+          <Button
+            onClick={payWithSolana}
+            disabled={loading}
+            className="whitespace-nowrap"
+          >
+            {loading ? "Processing..." : "Pay with Solana"}
+          </Button>
         </div>
       </div>
 

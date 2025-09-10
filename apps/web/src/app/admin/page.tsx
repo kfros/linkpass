@@ -1,9 +1,9 @@
 "use client";
 import { use, useEffect, useState } from "react";
-import { api } from "../../lib/api";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { api, adminApi } from "../../lib/api";
+import { Button } from "../../../../../_src/components/ui/button";
+import { Card } from "../../../../../_src/components/ui/card";
+import { Input } from "../../../../../_src/components/ui/input";
 import { Toaster } from "sonner";
 import { toast } from "sonner";
 

@@ -1,5 +1,5 @@
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "../../../../_src/components/ui/card";
+import { Button } from "../../../../_src/components/ui/button";
 import Link from "next/link";
 
 export default function Home() {
