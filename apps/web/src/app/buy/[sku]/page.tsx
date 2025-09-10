@@ -1,4 +1,4 @@
-import { api, type Pass } from "../../../../../../_src/lib/api";
+import { api, type Pass } from "@/lib/api";
 import { notFound } from "next/navigation";
 import BuyForm from "./ui/BuyForm";
 

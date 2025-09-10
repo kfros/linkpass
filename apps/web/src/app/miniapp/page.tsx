@@ -3,10 +3,10 @@
 import { useEffect, useState, useMemo } from "react";
 import WebApp from "@twa-dev/sdk";
 import Link from "next/link";
-import { api } from "../../../../../_src/lib/api";
-import { Button } from "../../../../../_src/components/ui/button";
-import { Input } from "../../../../../_src/components/ui/input";
-import { Card } from "../../../../../_src/components/ui/card";
+import { api } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 
 type TelegramWindow = Window & {

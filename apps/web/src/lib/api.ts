@@ -60,3 +60,36 @@ export const api = {
       }).then((res) => json<Order>(res)),
   },
 };
+
+export type AdminOrder = {
+  id: number;
+  merchantId: number;
+  sku: string;
+  amount: number;
+  chain: "mock" | "sol" | "ton";
+  tx: string | null;
+  status?: "created" | "paying" | "paid" | "failed";
+  receiptUrl?: string | null;
+  createdAt: string;
+};
+
+export type AdminPass = {
+  id: number;
+  merchantId: number;
+  sku: string;
+  title: string;
+  active: boolean;
+  createdAt: string;
+};
+
+export const adminApi = {
+  orders: (limit = 50, offset = 0) =>
+    fetch(`${API}/admin/orders?limit=${limit}&offset=${offset}`, { cache: "no-store" })
+      .then(res => json<AdminOrder[]>(res)),
+  passes: () =>
+    fetch(`${API}/admin/passes`, { cache: "no-store" })
+      .then(res => json<AdminPass[]>(res)),
+  verify: (sku: string, tx: string) =>
+    fetch(`${API}/admin/verify?sku=${encodeURIComponent(sku)}&tx=${encodeURIComponent(tx)}`, { cache: "no-store" })
+      .then(res => json<{ valid: boolean; reason?: string; orderId?: number; chain?: string; receiptUrl?: string | null }>(res)),
+};
