@@ -32,6 +32,7 @@ const CreateOrder = z.object({
 const UpdateOrderTx = z.object({
   tx: z.string().min(1),
   chain: z.enum(["sol", "ton"]),
+  receiptUrl: z.string().optional()
 });
 
 export async function buildServer() {
@@ -49,7 +50,7 @@ export async function buildServer() {
 
     // Be explicit: browsers preflight PATCH with these headers
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Accept", "Authorization"],
+    allowedHeaders: ["Content-Type", "Accept", "Authorization", "ngrok-skip-browser-warning"],
     exposedHeaders: ["Content-Type"],
     maxAge: 86400,
 
@@ -177,7 +178,12 @@ export async function buildServer() {
     const orderId = Number(id);
     const [row] = await db
       .update(tOrders)
-      .set({ tx: parsed.data.tx, chain: parsed.data.chain })
+      .set({
+      tx: parsed.data.tx,
+      chain: parsed.data.chain,
+      status: "paid",
+      ...(parsed.data.receiptUrl ? { receiptUrl: parsed.data.receiptUrl } : {}),
+    })
       .where(eq(tOrders.id, orderId))
       .returning({
         id: tOrders.id,

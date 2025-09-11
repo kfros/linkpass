@@ -26,6 +26,14 @@
       "skipFiles": ["<node_internals>/**"]
     },
     {
+      "name": "API (attach 9229)",
+      "type": "pwa-node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "skipFiles": ["<node_internals>/**"]
+    },
+    {
       "name": "Chrome: attach to http://localhost:3000",
       "type": "pwa-chrome",
       "request": "launch",

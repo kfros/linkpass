@@ -1,9 +1,16 @@
 export const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 
+const needsNgrokSkip = /:\/\/[^/]+\.ngrok-free\.app$/i.test(API);
+const defaultHeaders: HeadersInit = needsNgrokSkip
+  ? { "ngrok-skip-browser-warning": "true" }
+  : {};
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API Error: ${res.status} ${text}`);
+    let body = "";
+    try { body = await res.text(); } catch {}
+    const msg = `HTTP ${res.status} ${res.statusText}${body ? ` – ${body.slice(0, 500)}` : ""}`;
+    throw new Error(msg);
   }
   return res.json() as Promise<T>;
 }
@@ -84,12 +91,12 @@ export type AdminPass = {
 
 export const adminApi = {
   orders: (limit = 50, offset = 0) =>
-    fetch(`${API}/admin/orders?limit=${limit}&offset=${offset}`, { cache: "no-store" })
+    fetch(`${API}/admin/orders?limit=${limit}&offset=${offset}`, { cache: "no-store", headers: defaultHeaders })
       .then(res => json<AdminOrder[]>(res)),
   passes: () =>
-    fetch(`${API}/admin/passes`, { cache: "no-store" })
+    fetch(`${API}/admin/passes`, { cache: "no-store", headers: defaultHeaders })
       .then(res => json<AdminPass[]>(res)),
   verify: (sku: string, tx: string) =>
-    fetch(`${API}/admin/verify?sku=${encodeURIComponent(sku)}&tx=${encodeURIComponent(tx)}`, { cache: "no-store" })
+    fetch(`${API}/admin/verify?sku=${encodeURIComponent(sku)}&tx=${encodeURIComponent(tx)}`, { cache: "no-store", headers: defaultHeaders })
       .then(res => json<{ valid: boolean; reason?: string; orderId?: number; chain?: string; receiptUrl?: string | null }>(res)),
 };
