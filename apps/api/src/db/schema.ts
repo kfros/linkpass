@@ -46,6 +46,8 @@ export const orders = pgTable(
     amount: integer("amount").notNull(),
     chain: varchar("chain", { length: 32 }).notNull(),
     from: varchar("from_address", { length: 128 }),
+    tgUserId: text("tg_user_id"),
+    tgUsername: text("tg_username"),
     tx: text("tx"),
     status: orderStatusEnum("status").default("created").notNull(),
     receiptUrl: text("receipt_url"),

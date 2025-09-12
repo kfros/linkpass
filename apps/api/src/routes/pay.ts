@@ -15,6 +15,8 @@ import { findIncomingTxCombined } from "../chain/tonFinder.js";
 const PayBody = z.object({
   sku: z.string().optional(),
   merchantId: z.number().int().positive().optional(),
+  tgUserId: z.string().optional(),
+  tgUsername: z.string().optional(),
 });
 
 type TonTx = {
@@ -35,7 +37,7 @@ function extractFromAddress(tx: TonTx): string | null {
 export async function payRoutes(app: FastifyInstance) {
   // 1) Create order and return ton://transfer link
   app.post("/pay", async (req, reply) => {
-    const { sku = "vip-pass", merchantId = 1 } = PayBody.parse(req.body);
+    const { sku = "vip-pass", merchantId = 1, tgUserId, tgUsername } = PayBody.parse(req.body);
     // create order: status=paying, chain=ton
     const db = await getDb();
     const [order] = await db
@@ -46,6 +48,8 @@ export async function payRoutes(app: FastifyInstance) {
         amount: 0, // not used for chain settlement in MVP
         chain: "ton",
         status: "paying",
+        tgUserId,
+        tgUsername,
       })
       .returning();
 

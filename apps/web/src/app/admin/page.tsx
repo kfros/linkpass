@@ -6,8 +6,42 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { QRCodeCanvas } from "qrcode.react";
 
 type Merchant = { id: number; name: string; CreatedAt?: string };
+
+function ReceiptQR({ url, onClose }: { url: string; onClose: () => void }) {
+  if (!url) return null;
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl p-4 shadow-xl">
+        <div className="font-semibold mb-2">Receipt</div>
+        <QRCodeCanvas value={url} size={224} />
+        <div className="text-xs break-all mt-2">{url}</div>
+        <div className="flex gap-2 mt-3 justify-end">
+          <button
+            className="px-3 py-1 rounded bg-neutral-200 hover:bg-neutral-300"
+            onClick={() => navigator.clipboard.writeText(url)}
+          >
+            Copy
+          </button>
+          <button
+            className="px-3 py-1 rounded bg-neutral-200 hover:bg-neutral-300"
+            onClick={() => window.open(url, "_blank")}
+          >
+            Open
+          </button>
+          <button
+            className="px-3 py-1 rounded bg-neutral-200 hover:bg-neutral-300"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Admin() {
   // --- merchant & pass creation state ---
@@ -26,6 +60,7 @@ export default function Admin() {
   // --- verify form state ---
   const [verifySku, setVerifySku] = useState("vip-pass");
   const [verifyTx, setVerifyTx] = useState("");
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
   const canVerify = useMemo(
     () => verifySku.trim() && verifyTx.trim(),
     [verifySku, verifyTx]
@@ -310,13 +345,21 @@ export default function Admin() {
                     </td>
                     <td>
                       {o.receiptUrl ? (
-                        <a
-                          className="underline"
-                          href={o.receiptUrl}
-                          target="_blank"
-                        >
-                          view
-                        </a>
+                        <div className="flex gap-2 items-center">
+                          <a
+                            className="underline"
+                            href={o.receiptUrl}
+                            target="_blank"
+                          >
+                            view
+                          </a>
+                          <button
+                            className="text-xs underline"
+                            onClick={() => setQrUrl(o.receiptUrl!)}
+                          >
+                            QR
+                          </button>
+                        </div>
                       ) : (
                         "—"
                       )}
@@ -366,6 +409,7 @@ export default function Admin() {
           </div>
         )}
       </Card>
+      {qrUrl && <ReceiptQR url={qrUrl} onClose={() => setQrUrl(null)} />}
     </main>
   );
 }
