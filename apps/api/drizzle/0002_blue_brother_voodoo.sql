@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "from_address" varchar(128);

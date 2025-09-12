@@ -9,6 +9,7 @@ import {
   pgEnum,
   index,
 } from "drizzle-orm/pg-core";
+import { fr } from "zod/v4/locales/index.cjs";
 
 export const orderStatusEnum = pgEnum("order_status", [
   "created",
@@ -44,6 +45,7 @@ export const orders = pgTable(
     sku: varchar("sku", { length: 64 }).notNull(),
     amount: integer("amount").notNull(),
     chain: varchar("chain", { length: 32 }).notNull(),
+    from: varchar("from_address", { length: 128 }),
     tx: text("tx"),
     status: orderStatusEnum("status").default("created").notNull(),
     receiptUrl: text("receipt_url"),

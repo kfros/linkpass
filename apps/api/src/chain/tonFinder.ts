@@ -6,7 +6,7 @@ import fetch from "node-fetch";
 
 // ---------- JSON-RPC strict (amount + comment) ----------
 export async function findIncomingTxJsonRpcStrict(recipient: string, expectedNano: string, expectedComment: string)
-: Promise<{ ok: true; txHash: string } | { ok: false }> {
+: Promise<{ ok: true; txHash: string, from: string | null } | { ok: false }> {
   const client = getTonClient();
   const addr = Address.parse(recipient);
   const txs = await client.getTransactions(addr, { limit: 40, archival: false });
@@ -15,11 +15,12 @@ export async function findIncomingTxJsonRpcStrict(recipient: string, expectedNan
     const inMsg = tx.inMessage;
     if (!inMsg || inMsg.info.type !== "internal") continue;
     const valueStr = inMsg.info.value.coins.toString();
+    const from = inMsg.info.src?.toString();
     const comment = tryDecodeTextCommentFromCell(inMsg.body);
     if (valueStr === expectedNano && comment === expectedComment) {
         // convert tx.hash (Buffer) to base64 string
-      const hashB64 = Buffer.from(tx.hash()).toString('base64'); 
-      return { ok: true, txHash: hashB64 };
+      const hashB64 = Buffer.from(tx.hash()).toString('base64');
+      return { ok: true, txHash: hashB64, from };
     }
   }
   return { ok: false };
@@ -36,7 +37,7 @@ function b64urlToUtf8(b64url: string | undefined): string | null {
 }
 
 export async function findIncomingTxRestStrict(recipient: string, expectedNano: string, expectedComment: string)
-: Promise<{ ok: true; txHash: string } | { ok: false }> {
+: Promise<{ ok: true; txHash: string; from: string | null } | { ok: false }> {
   const base = process.env.TONCENTER_API || "https://testnet.toncenter.com/api/v3";
   const key = process.env.TONCENTER_API_KEY || "";
   const url = new URL(`${base}/transactions`);
@@ -79,7 +80,9 @@ export async function findIncomingTxRestStrict(recipient: string, expectedNano: 
 
       if (comment === expectedComment) {
         const hash = tx.hash || tx.transaction_id || tx.id;
-        if (typeof hash === "string") return { ok: true, txHash: hash };
+        // Try to get the sender address if available
+        const from = m?.source || m?.src || m?.from || null;
+        if (typeof hash === "string") return { ok: true, txHash: hash, from: from ? String(from) : null };
       }
     }
   }
@@ -88,7 +91,7 @@ export async function findIncomingTxRestStrict(recipient: string, expectedNano: 
 
 // ---------- JSON-RPC fallback (amount-only + time window) ----------
 export async function findIncomingByAmountJsonRpc(recipient: string, expectedNano: string, notOlderThanMs = 10 * 60 * 1000)
-: Promise<{ ok: true; txHash: string } | { ok: false }> {
+: Promise<{ ok: true; txHash: string; from: string | null } | { ok: false }> {
   const client = getTonClient();
   const addr = Address.parse(recipient);
   const txs = await client.getTransactions(addr, { limit: 50, archival: false });
@@ -101,8 +104,9 @@ export async function findIncomingByAmountJsonRpc(recipient: string, expectedNan
     const inMsg = tx.inMessage;
     if (!inMsg || inMsg.info.type !== "internal") continue;
     if (inMsg.info.value.coins.toString() === expectedNano) {
+      const from = inMsg.info.src?.toString();
       const hashB64 = Buffer.from(tx.hash()).toString('base64');
-      return { ok: true, txHash: hashB64 };
+      return { ok: true, txHash: hashB64, from };
     }
   }
   return { ok: false };
@@ -110,7 +114,7 @@ export async function findIncomingByAmountJsonRpc(recipient: string, expectedNan
 
 // ---------- Orchestrator ----------
 export async function findIncomingTxCombined(recipient: string, expectedNano: string, expectedComment: string)
-: Promise<{ ok: true; txHash: string } | { ok: false }> {
+: Promise<{ ok: true; txHash: string; from: string | null } | { ok: false }> {
   // 1) JSON-RPC strict
   const a = await findIncomingTxJsonRpcStrict(recipient, expectedNano, expectedComment);
   if (a.ok) return a;

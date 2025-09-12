@@ -72,6 +72,7 @@ export type AdminOrder = {
   id: number;
   merchantId: number;
   sku: string;
+  from: string | null;
   amount: number;
   chain: "mock" | "sol" | "ton";
   tx: string | null;

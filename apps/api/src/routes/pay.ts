@@ -17,6 +17,21 @@ const PayBody = z.object({
   merchantId: z.number().int().positive().optional(),
 });
 
+type TonTx = {
+  in_msg?: { source?: string | null };
+  hash?: string;
+};
+type ResolveResult = {
+  tx: TonTx;                    // full tx object from JSON-RPC (already fetched)
+  receiptUrl: string;           // explorer URL you already compute
+};
+
+function extractFromAddress(tx: TonTx): string | null {
+  // TonCenter/TON JSON-RPC: source address often at tx.in_msg.source (fift/booster names vary).
+  // Fall back to null if missing.
+  return tx?.in_msg?.source ?? null;
+}
+
 export async function payRoutes(app: FastifyInstance) {
   // 1) Create order and return ton://transfer link
   app.post("/pay", async (req, reply) => {
@@ -96,6 +111,7 @@ export async function payRoutes(app: FastifyInstance) {
       .set({
         status: "paid",
         tx: hit.txHash,
+        from: hit.from,
         chain: "ton",
         receiptUrl,
         updatedAt: new Date(),

@@ -281,6 +281,7 @@ export default function Admin() {
                   <th>SKU</th>
                   <th>Amount</th>
                   <th>Chain</th>
+                  <th>From</th>
                   <th>TX</th>
                   <th>Status</th>
                   <th>Receipt</th>
@@ -293,6 +294,7 @@ export default function Admin() {
                     <td>{o.id}</td>
                     <td>{o.sku}</td>
                     <td>{(o.amount / 100).toFixed(2)}</td>
+                    <td className="truncate max-w-[280px]">{o.from ?? "—"}</td>
                     <td className="uppercase">{o.chain}</td>
                     <td className="max-w-[280px] truncate">{o.tx ?? "—"}</td>
                     <td>

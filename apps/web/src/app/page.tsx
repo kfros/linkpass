@@ -11,12 +11,26 @@ export default function Home() {
           Cross-chain access passes with Telegram Mini-App & Solana Blinks.
         </p>
         <div className="flex items-center justify-center gap-3">
-          <Button asChild><Link href="/telegram">Open Telegram Mini-App</Link></Button>
-          <Button variant="outline" asChild><Link href="/blink">Try Blink Demo</Link></Button>
-          <Button variant="ghost" asChild><Link href="/admin">Go to Admin Panel</Link></Button>
+          <Button asChild>
+            <Link href="/telegram">Open Telegram Mini-App</Link>
+          </Button>
           <Button variant="outline" asChild>
-            <Link href="/buy/vip-pass" className="text-sm text-muted-foreground underline">Buy a VIP Pass
-          </Link></Button>
+            <Link href="/blink">Try Blink Demo</Link>
+          </Button>
+          <Button variant="ghost" asChild>
+            <Link href="/admin">Go to Admin Panel</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link
+              href={{
+                pathname: "/buy",
+                query: { merchantId: "1", sku: "vip-pass" },
+              }}
+              className="inline-flex items-center rounded-lg border px-4 py-2 underline"
+            >
+              Buy a VIP Pass
+            </Link>
+          </Button>
         </div>
       </Card>
     </main>
