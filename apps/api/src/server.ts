@@ -13,6 +13,8 @@ import {
 import { verifyTelegramInitData } from "./telegram/verify";
 import crypto from "crypto";
 
+import { payRoutes } from "./routes/pay";
+
 const CreateMerchant = z.object({
   name: z.string().min(2),
 });
@@ -60,6 +62,10 @@ export async function buildServer() {
 
     credentials: false, // keep false unless you use cookies
   });
+
+  await app.register(payRoutes);
+
+  // Simple health check
 
   app.get("/health", async () => {
     return { status: "ok" };
