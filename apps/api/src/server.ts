@@ -14,6 +14,7 @@ import { verifyTelegramInitData } from "./telegram/verify";
 import crypto from "crypto";
 
 import { payRoutes } from "./routes/pay";
+import { actionsRoutes } from "./routes/actions";
 
 const CreateMerchant = z.object({
   name: z.string().min(2),
@@ -25,6 +26,8 @@ const CreatePass = z.object({
     .min(2)
     .regex(/^[a-zA-Z0-9-]+$/i, "SKU must be alphanumeric with optional dashes"),
   title: z.string().min(2),
+  priceNano: z.coerce.number().int().positive().optional(), // in nanotons
+  chain: z.enum(["TON", "SOL"]).optional(),               // default TON
 });
 const CreateOrder = z.object({
   merchantId: z.coerce.number().int().positive(),
@@ -64,6 +67,7 @@ export async function buildServer() {
   });
 
   await app.register(payRoutes);
+  await app.register(actionsRoutes);
 
   // Simple health check
 
@@ -97,7 +101,7 @@ export async function buildServer() {
     const parsed = CreatePass.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send(parsed.error.message);
 
-    const { merchantId, sku, title } = parsed.data;
+    const { merchantId, sku, title, priceNano, chain } = parsed.data;
     const db = await getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(tMerchants.id, Number(merchantId)),
@@ -115,13 +119,21 @@ export async function buildServer() {
 
     const [row] = await db
       .insert(tPasses)
-      .values({ merchantId: Number(merchantId), sku, title })
+      .values({ 
+        merchantId: Number(merchantId), 
+        sku, 
+        title,
+        priceNano: priceNano ? BigInt(priceNano) : null,
+        chain: chain || null,
+      })
       .returning({
         id: tPasses.id,
         merchantId: tPasses.merchantId,
         sku: tPasses.sku,
         title: tPasses.title,
         active: tPasses.active,
+        priceNano: tPasses.priceNano,
+        chain: tPasses.chain,
         createdAt: tPasses.createdAt,
       });
     return reply.status(201).send(row);
@@ -144,7 +156,7 @@ export async function buildServer() {
     const parsed = CreateOrder.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send(parsed.error.message);
 
-    const { merchantId, sku, amount } = parsed.data;
+    const { merchantId, sku, amount, } = parsed.data;
     const db = await getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(tMerchants.id, Number(merchantId)),
@@ -170,6 +182,10 @@ export async function buildServer() {
         amount: tOrders.amount,
         chain: tOrders.chain,
         tx: tOrders.tx,
+        amountNano: tOrders.amountNano,
+        memo: tOrders.memo,
+        confirmedAt: tOrders.confirmedAt,
+        toAddress: tOrders.toAddress,
         createdAt: tOrders.createdAt,
       });
     return reply.status(201).send(row);
@@ -244,7 +260,7 @@ export async function buildServer() {
   });
 
   // ---------- ADMIN: LIST ORDERS ----------
-  app.get("/admin/orders", async (request, reply) => {
+  app.get("/admin/orders", async (request) => {
     const { limit = "50", offset = "0" } = request.query as {
       limit?: string;
       offset?: string;
@@ -264,7 +280,7 @@ export async function buildServer() {
   });
 
   // ---------- ADMIN: LIST PASSES ----------
-  app.get("/admin/passes", async (request, reply) => {
+  app.get("/admin/passes", async (request) => {
     const { limit = "50", offset = "0" } = request.query as {
       limit?: string;
       offset?: string;

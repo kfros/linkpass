@@ -4,26 +4,45 @@ import { getTonClient } from "./tonRpc";
 import { tryDecodeTextCommentFromCell } from "./tonComment";
 import fetch from "node-fetch";
 
-// ---------- JSON-RPC strict (amount + comment) ----------
-export async function findIncomingTxJsonRpcStrict(recipient: string, expectedNano: string, expectedComment: string)
-: Promise<{ ok: true; txHash: string, from: string | null } | { ok: false }> {
-  const client = getTonClient();
-  const addr = Address.parse(recipient);
-  const txs = await client.getTransactions(addr, { limit: 40, archival: false });
+function eqNano(a: string, b: string) {
+  return BigInt(a) === BigInt(b);
+}
 
-  for (const tx of txs) {
-    const inMsg = tx.inMessage;
-    if (!inMsg || inMsg.info.type !== "internal") continue;
-    const valueStr = inMsg.info.value.coins.toString();
-    const from = inMsg.info.src?.toString();
-    const comment = tryDecodeTextCommentFromCell(inMsg.body);
-    if (valueStr === expectedNano && comment === expectedComment) {
-        // convert tx.hash (Buffer) to base64 string
-      const hashB64 = Buffer.from(tx.hash()).toString('base64');
-      return { ok: true, txHash: hashB64, from };
+function debugTx(label: string, valueStr: string, comment: string | null, from?: string) {
+  console.log(`[debug ${label}] value(nano)=${valueStr} comment="${comment ?? ''}" from=${from ?? ''}`);
+}
+
+// ---------- JSON-RPC strict (amount + comment) ----------
+export async function findIncomingTxJsonRpcStrict(
+  recipient: string,
+  expectedNano: string,
+  expectedComment: string
+): Promise<{ ok: true; txHash: string; from: string | null } | { ok: false }> {
+  try {
+    const client = getTonClient();
+    const addr = Address.parse(recipient);
+    const txs = await client.getTransactions(addr, { limit: 50, archival: true }); // tuned
+
+    for (const tx of txs) {
+      const inMsg = tx.inMessage;
+      if (!inMsg || inMsg.info.type !== "internal") continue;
+
+      const valueStr = inMsg.info.value.coins.toString();
+      const from = inMsg.info.src?.toString() ?? null;
+      const comment = (tryDecodeTextCommentFromCell(inMsg.body) ?? "").trim();
+
+      if (BigInt(valueStr) === BigInt(expectedNano) &&
+          comment === (expectedComment ?? "").trim()) {
+        const hashB64 = Buffer.from(tx.hash()).toString("base64");
+        return { ok: true, txHash: hashB64, from };
+      }
     }
+    return { ok: false };
+  } catch (err) {
+    // do NOT throw — provider hiccup should not 500 your route
+    console.warn("[TON] RPC getTransactions failed; will fallback", (err as any)?.code || (err as any)?.message);
+    return { ok: false };
   }
-  return { ok: false };
 }
 
 // ---------- REST v3 strict (amount + comment) ----------
@@ -32,6 +51,7 @@ function b64urlToUtf8(b64url: string | undefined): string | null {
   try {
     const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
     const buf = Buffer.from(b64, "base64");
+    debugTx('rest', "", buf.toString("utf8"));
     return buf.toString("utf8");
   } catch { return null; }
 }
@@ -116,15 +136,18 @@ export async function findIncomingByAmountJsonRpc(recipient: string, expectedNan
 export async function findIncomingTxCombined(recipient: string, expectedNano: string, expectedComment: string)
 : Promise<{ ok: true; txHash: string; from: string | null } | { ok: false }> {
   // 1) JSON-RPC strict
-  const a = await findIncomingTxJsonRpcStrict(recipient, expectedNano, expectedComment);
+  const a = await findIncomingTxJsonRpcStrict(recipient, expectedNano, expectedComment)
+                .catch(() => ({ ok: false as const }));
   if (a.ok) return a;
 
   // 2) REST strict (toncenter v3 with include_msg_body)
-  const b = await findIncomingTxRestStrict(recipient, expectedNano, expectedComment);
+  const b = await findIncomingTxRestStrict(recipient, expectedNano, expectedComment)
+                .catch(() => ({ ok: false as const }));
   if (b.ok) return b;
 
   // 3) JSON-RPC amount-only fallback
-  const c = await findIncomingByAmountJsonRpc(recipient, expectedNano, 10 * 60 * 1000);
+  const c = await findIncomingByAmountJsonRpc(recipient, expectedNano, 10 * 60 * 1000)
+                .catch(() => ({ ok: false as const }));
   if (c.ok) return c;
 
   return { ok: false };
