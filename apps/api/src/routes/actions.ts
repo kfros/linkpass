@@ -140,7 +140,7 @@ export async function actionsRoutes(app: FastifyInstance) {
 
       return reply.send(response);
     } catch (error) {
-      req.log.error({ error }, "Error creating Blink transaction");
+      req.log.info({ error }, "Error creating Blink transaction");
       
       reply.header("Access-Control-Allow-Origin", "*");
       reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
@@ -182,7 +182,7 @@ export async function actionsRoutes(app: FastifyInstance) {
         confirmedAt: order.confirmedAt,
       });
     } catch (error) {
-      req.log.error({ error }, "Error checking order status");
+      req.log.info({ error }, "Error checking order status");
       
       reply.header("Access-Control-Allow-Origin", "*");
       

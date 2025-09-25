@@ -11,7 +11,7 @@ import {
 } from "./db/schema";
 
 import { verifyTelegramInitData } from "./telegram/verify";
-import crypto from "crypto";
+import * as crypto from "crypto";
 
 import { payRoutes } from "./routes/pay";
 import { actionsRoutes } from "./routes/actions";

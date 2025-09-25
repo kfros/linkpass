@@ -170,7 +170,7 @@ export async function payRoutes(app: FastifyInstance) {
 
       return reply.send({ ok: true, tx: hit.txHash, receiptUrl });
     } catch (e) {
-      req.log.error({ err: e }, "confirm: error");
+      req.log.info({ err: e }, "confirm: error");
       return reply.code(500).send({ ok: false, reason: "domain error", error: (e as Error).message });
     }
   });
