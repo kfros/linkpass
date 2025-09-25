@@ -227,21 +227,21 @@ export default function BuyPass() {
         {showQR && link && (
           <div className="mt-4 p-4 border rounded-xl inline-block">
             <div className="mb-2 font-medium">
-              {selectedChain === "SOL" ? "Scan with Solana wallet or Blink-compatible app" : "Scan to pay"}
+              {selectedChain === "SOL" ? "Scan with Phantom or Blink-compatible wallet" : "Scan to pay"}
             </div>
-            <QRCodeCanvas value={link} size={224} />
-            <div className="mt-2 text-xs break-all">{link}</div>
+            <QRCodeCanvas value={selectedChain === "SOL" ? `solana-action:${API}/api/actions/buy-pass` : link} size={224} />
+            <div className="mt-2 text-xs break-all">{selectedChain === "SOL" ? `solana-action:${API}/api/actions/buy-pass` : link}</div>
             <div className="mt-2 flex gap-2">
               <button
                 className="px-3 py-1 rounded bg-neutral-200 hover:bg-neutral-300"
-                onClick={() => navigator.clipboard.writeText(link)}
+                onClick={() => navigator.clipboard.writeText(selectedChain === "SOL" ? `solana-action:${API}/api/actions/buy-pass` : link)}
               >
                 Copy link
               </button>
               {selectedChain === "SOL" && (
                 <button
                   className="px-3 py-1 rounded bg-purple-200 hover:bg-purple-300"
-                  onClick={() => window.open(link, "_blank")}
+                  onClick={() => window.open(`solana-action:${API}/api/actions/buy-pass`, "_blank")}
                 >
                   Open Blink
                 </button>

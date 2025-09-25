@@ -29,7 +29,7 @@ export class SolanaGateway implements ChainGateway {
   }
 
   async makePaymentIntent(input: PaymentIntentInput): Promise<PaymentIntent> {
-    const { to, amountNano, memo } = input;
+    const { to, amountNano, memo, from } = input;
     assert(to, "Solana: 'to' is required");
     assert(/^\d+$/.test(String(amountNano)), "Solana: amountNano must be an integer string");
 
@@ -37,13 +37,15 @@ export class SolanaGateway implements ChainGateway {
     const recipient = new PublicKey(to);
     const lamports = BigInt(amountNano);
 
+    // Use the sender's wallet public key from 'from'
+    const userPubkey = from ? new PublicKey(from) : new PublicKey("11111111111111111111111111111111");
+
     // Create a basic SOL transfer transaction
     const transaction = new Transaction();
-    
-    // Add transfer instruction
+    transaction.feePayer = userPubkey;
     transaction.add(
       SystemProgram.transfer({
-        fromPubkey: new PublicKey("11111111111111111111111111111111"), // placeholder - will be replaced by user's wallet
+        fromPubkey: userPubkey,
         toPubkey: recipient,
         lamports: Number(lamports),
       })

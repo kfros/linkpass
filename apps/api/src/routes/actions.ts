@@ -45,7 +45,7 @@ export async function actionsRoutes(app: FastifyInstance) {
         actions: [
           {
             label: "Buy for 0.01 SOL",
-            href: `${baseUrl}/api/actions/buy-pass`,
+            href: `solana-action:${baseUrl}/api/actions/buy-pass`,
             type: "transaction",
           },
         ],
@@ -110,6 +110,7 @@ export async function actionsRoutes(app: FastifyInstance) {
         to: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
         amountNano: "10000000",
         memo: `Blink-Order-${order.id}`,
+        from: account, // <-- pass the user's wallet public key
       });
 
       // Update order with the correct memo

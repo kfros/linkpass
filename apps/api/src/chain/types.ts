@@ -4,6 +4,7 @@ export interface PaymentIntentInput {
   to: string;              // recipient address
   amountNano: string;      // integer nanoton / lamports etc.
   memo?: string;           // optional comment / reference
+  from?: string;           // sender wallet public key (for Solana)
 }
 
 export interface PaymentIntent {

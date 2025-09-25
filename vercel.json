@@ -1,0 +1,12 @@
+{
+  "projects": [
+    {
+      "src": "apps/web",
+      "use": "@vercel/next"
+    },
+    {
+      "src": "apps/api",
+      "use": "@vercel/node"
+    }
+  ]
+}
