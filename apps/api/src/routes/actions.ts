@@ -71,10 +71,10 @@ export async function actionsRoutes(app: FastifyInstance) {
   app.post("/api/actions/buy-pass", async (req, reply) => {
     try {
       const { account } = req.body as ActionPostRequest;
-      
+
       if (!account) {
         return reply.code(400).send({
-          error: "Missing required field: account",
+          error: "Missing required field: account (sender public key)",
         });
       }
 
@@ -88,7 +88,7 @@ export async function actionsRoutes(app: FastifyInstance) {
       }
 
       const db = await getDb();
-      
+
       // Create order in database
       const [order] = await db
         .insert(orders)
@@ -124,7 +124,7 @@ export async function actionsRoutes(app: FastifyInstance) {
       // Extract transaction from the intent URI
       const url = new URL(intent.uri);
       const serializedTransaction = url.searchParams.get("tx");
-      
+
       if (!serializedTransaction) {
         throw new Error("Failed to generate transaction");
       }
