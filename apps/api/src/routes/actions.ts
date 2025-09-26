@@ -45,7 +45,7 @@ export async function actionsRoutes(app: FastifyInstance) {
         actions: [
           {
             label: "Buy for 0.01 SOL",
-            href: `solana-action:${apiUrl}/api/actions/buy-pass`,
+            href: `${apiUrl}/api/actions/buy-pass`,
             type: "transaction",
           },
         ],
