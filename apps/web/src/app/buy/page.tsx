@@ -14,16 +14,6 @@ function isMobileUA() {
 type Chain = "TON" | "SOL";
 
 
-  // Phantom wallet type declaration for TypeScript
-  declare global {
-    interface Window {
-      solana?: {
-        connect: () => Promise<{ publicKey?: { toString(): string } }>;
-        publicKey?: { toString(): string };
-        isPhantom?: boolean;
-      };
-    }
-  }
 
 type ConfirmResult = {
   ok: boolean;
@@ -75,30 +65,9 @@ export default function BuyPass() {
     ? { "ngrok-skip-browser-warning": "true" }
     : undefined;
 
-  // Connect to Phantom wallet and get public key
-  async function getSolanaPublicKey(): Promise<string | null> {
-    if (typeof window === "undefined" || !window.solana) return null;
-    try {
-      // Request connection to Phantom
-      const resp = await window.solana.connect();
-      return resp.publicKey?.toString() ?? null;
-    } catch {
-      return null;
-    }
-  }
-
   async function createOrder(chain: Chain) {
     setBusy(true);
     try {
-      let account: string | undefined;
-      if (chain === "SOL") {
-        account = await getSolanaPublicKey() ?? undefined;
-        if (!account) {
-          alert("Please connect your Phantom wallet to proceed with Solana payment.");
-          setBusy(false);
-          return;
-        }
-      }
       const res = await fetch(`${API}/pay`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...headers },
@@ -106,7 +75,6 @@ export default function BuyPass() {
           sku: "vip-pass",
           merchantId: 1,
           chain: chain,
-          account, // send user's Solana public key for SOL payments
           // pass Telegram identity (optional)
           tgUserId: tgUser?.id,
           tgUsername: tgUser?.username,

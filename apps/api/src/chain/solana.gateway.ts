@@ -37,11 +37,8 @@ export class SolanaGateway implements ChainGateway {
     const recipient = new PublicKey(to);
     const lamports = BigInt(amountNano);
 
-    // Use the sender's wallet public key from 'from'
-    if (!from) {
-      throw new Error("Sender public key ('from') is required for devnet simulation");
-    }
-    const userPubkey = new PublicKey(from);
+    // Use the sender's wallet public key from 'from' if provided, else use a default placeholder
+    const userPubkey = from ? new PublicKey(from) : new PublicKey("11111111111111111111111111111111");
 
     // Check if recipient address is valid and not the default
     if (recipient.toBase58() === "11111111111111111111111111111111") {
