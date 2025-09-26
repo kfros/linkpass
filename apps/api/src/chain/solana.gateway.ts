@@ -31,14 +31,22 @@ export class SolanaGateway implements ChainGateway {
   async makePaymentIntent(input: PaymentIntentInput): Promise<PaymentIntent> {
     const { to, amountNano, memo, from } = input;
     assert(to, "Solana: 'to' is required");
-    assert(/^\d+$/.test(String(amountNano)), "Solana: amountNano must be an integer string");
+    assert(/^[\d]+$/.test(String(amountNano)), "Solana: amountNano must be an integer string");
 
     const connection = this.getConnection();
     const recipient = new PublicKey(to);
     const lamports = BigInt(amountNano);
 
     // Use the sender's wallet public key from 'from'
-    const userPubkey = from ? new PublicKey(from) : new PublicKey("11111111111111111111111111111111");
+    if (!from) {
+      throw new Error("Sender public key ('from') is required for devnet simulation");
+    }
+    const userPubkey = new PublicKey(from);
+
+    // Check if recipient address is valid and not the default
+    if (recipient.toBase58() === "11111111111111111111111111111111") {
+      throw new Error("Recipient address is not set. Please configure SOLANA_RECIPIENT_ADDRESS for devnet.");
+    }
 
     // Create a basic SOL transfer transaction
     const transaction = new Transaction();
@@ -74,10 +82,10 @@ export class SolanaGateway implements ChainGateway {
     });
 
     const base64Transaction = serializedTransaction.toString("base64");
-    
+
     // Create Blink-compatible URI
     const blinkUrl = this.createBlinkUrl(base64Transaction, memo);
-    
+
     return {
       uri: blinkUrl,
       qrText: blinkUrl,
