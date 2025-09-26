@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 
-const BLINK_URL = process.env.NEXT_PUBLIC_BASE_URL 
-  ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/actions/buy-pass`
+const BLINK_URL = process.env.NEXT_PUBLIC_API_URL 
+  ? `${process.env.NEXT_PUBLIC_API_URL}/actions/buy-pass`
   : "http://localhost:4000/api/actions/buy-pass";
 
 export default function BlinkPage() {
