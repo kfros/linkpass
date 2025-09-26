@@ -34,10 +34,10 @@ export async function actionsRoutes(app: FastifyInstance) {
 
   // GET /api/actions/buy-pass - Returns action metadata
   app.get("/api/actions/buy-pass", async (req, reply) => {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:4000";
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
     
     const response: ActionGetResponse = {
-      icon: `${baseUrl}/icon.png`,
+      icon: `${apiUrl}/icon.png`,
       label: "Buy VIP Pass",
       description: "Purchase a VIP pass with Solana. One-click payment via Blink!",
       title: "LinkPass - VIP Pass",
@@ -45,7 +45,7 @@ export async function actionsRoutes(app: FastifyInstance) {
         actions: [
           {
             label: "Buy for 0.01 SOL",
-            href: `solana-action:${baseUrl}/api/actions/buy-pass`,
+            href: `solana-action:${apiUrl}/api/actions/buy-pass`,
             type: "transaction",
           },
         ],
