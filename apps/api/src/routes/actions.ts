@@ -100,37 +100,29 @@ export async function actionsRoutes(app: FastifyInstance) {
           chain: "sol",
           status: "paying",
           toAddress: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
-          memo: `Blink-Order-${Date.now()}`,
+          memo: `Order-${Date.now()}`,
         })
         .returning();
 
-      // Get Solana gateway and create payment intent
-      const gw = getGateway("SOL");
-      const intent = await gw.makePaymentIntent({
-        to: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
-        amountNano: "10000000",
-        memo: `Blink-Order-${order.id}`,
-        from: account, // <-- pass the user's wallet public key
-      });
+      // Generate Solana Pay URL for QR code
+      const recipient = process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111";
+      const amount = 0.01;
+      const reference = order.id;
+      const label = "VIP Pass";
+      const message = "Buy VIP Pass";
+      const solanaPayUrl = `solana:${recipient}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}`;
 
       // Update order with the correct memo
       await db
         .update(orders)
         .set({ 
-          memo: `Blink-Order-${order.id}`,
+          memo: `Order-${order.id}`,
         })
         .where(eq(orders.id, order.id));
 
-      // Extract transaction from the intent URI
-      const url = new URL(intent.uri);
-      const serializedTransaction = url.searchParams.get("tx");
-
-      if (!serializedTransaction) {
-        throw new Error("Failed to generate transaction");
-      }
-
-      const response: ActionPostResponse = {
-        transaction: serializedTransaction,
+      const response = {
+        orderId: order.id,
+        link: solanaPayUrl,
         message: `VIP Pass purchase created! Order ID: ${order.id}`,
       };
 
