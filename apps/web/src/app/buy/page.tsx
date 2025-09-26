@@ -232,11 +232,11 @@ export default function BuyPass() {
               {selectedChain === "SOL" ? "Scan with Phantom or Blink-compatible wallet" : "Scan to pay"}
             </div>
             <QRCodeCanvas value={link} size={224} />
-            <div className="mt-2 text-xs break-all">{selectedChain === "SOL" ? `${API}/api/actions/buy-pass` : link}</div>
+            <div className="mt-2 text-xs break-all">{link}</div>
             <div className="mt-2 flex gap-2">
               <button
                 className="px-3 py-1 rounded bg-neutral-200 hover:bg-neutral-300"
-                onClick={() => navigator.clipboard.writeText(selectedChain === "SOL" ? `${API}/api/actions/buy-pass` : link)}
+                onClick={() => navigator.clipboard.writeText(link)}
               >
                 Copy link
               </button>
