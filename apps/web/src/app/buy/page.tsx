@@ -112,7 +112,7 @@ export default function BuyPass() {
 
   async function confirmOnce() {
     if (!orderId) return;
-    const res = await fetch(`${API}/orders/${orderId}/confirm`, { method: "POST", headers });
+    const res = await fetch(`${API}orders/${orderId}/confirm`, { method: "POST", headers });
     const d: ConfirmResult = await res.json();
     setResult(d);
   }

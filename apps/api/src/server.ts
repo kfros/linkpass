@@ -43,21 +43,25 @@ const UpdateOrderTx = z.object({
 export async function buildServer() {
   const app = fastify({ logger: true });
   await app.register(cors, {
-    origin: [
-      "http://localhost:3000",
-      "https://localhost:4000",
+  origin: (origin, cb) => {
+    // Allow requests with no origin (like curl/Postman)
+    if (!origin) return cb(null, true);
+    const allowed = [
       "https://linkpass-web.onrender.com",
       "https://linkpass-api.onrender.com",
-      "*"
-    ],
-    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Accept", "Authorization", "ngrok-skip-browser-warning"],
-    exposedHeaders: ["Content-Type"],
-    maxAge: 86400,
-    preflight: true,
-    strictPreflight: false,
-    credentials: false,
-  });
+      "https://localhost:4000",
+      "http://localhost:3000"
+    ];
+    cb(null, allowed.includes(origin));
+  },
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Accept", "Authorization", "ngrok-skip-browser-warning"],
+  exposedHeaders: ["Content-Type"],
+  maxAge: 86400,
+  preflight: true,
+  strictPreflight: false,
+  credentials: false,
+});
 
   await app.register(payRoutes);
   await app.register(actionsRoutes);
