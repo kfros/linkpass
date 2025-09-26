@@ -4,6 +4,7 @@ import { orders } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getGateway } from "../chain";
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import type { Chain } from "../chain/types";
 
 const PayBody = z.object({
@@ -68,11 +69,12 @@ export async function payRoutes(app: FastifyInstance) {
       if (chain === "SOL") {
         // Generate Solana Pay URL for QR code
         const recipient = skuConfig.recipient;
+        const publicKey = new PublicKey(recipient);
         const amount = Number(skuConfig.amountNano) / 1e9; // convert lamports to SOL
         const reference = order.id;
         const label = "VIP Pass";
         const message = "Buy VIP Pass";
-        link = `solana:${recipient}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}`;
+        link = `solana:${publicKey}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}`;
         qrText = link;
       } else {
         // Generate payment intent for TON or other chains
