@@ -128,7 +128,7 @@ export class SolanaGateway implements ChainGateway {
         // Get transaction details
         const tx = await connection.getTransaction(sigInfo.signature, {
           commitment: "confirmed",
-        });
+        }, );
 
         if (!tx || !tx.meta) continue;
 

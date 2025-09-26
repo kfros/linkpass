@@ -62,12 +62,28 @@ export async function payRoutes(app: FastifyInstance) {
         })
         .returning();
 
-      // Generate payment intent
-      const intent = await gw.makePaymentIntent({
-        to: skuConfig.recipient,
-        amountNano: skuConfig.amountNano,
-        memo: `Order-${order.id}`,
-      });
+      let link: string;
+      let qrText: string;
+
+      if (chain === "SOL") {
+        // Generate Solana Pay URL for QR code
+        const recipient = skuConfig.recipient;
+        const amount = Number(skuConfig.amountNano) / 1e9; // convert lamports to SOL
+        const reference = order.id;
+        const label = "VIP Pass";
+        const message = "Buy VIP Pass";
+        link = `solana:${recipient}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}`;
+        qrText = link;
+      } else {
+        // Generate payment intent for TON or other chains
+        const intent = await gw.makePaymentIntent({
+          to: skuConfig.recipient,
+          amountNano: skuConfig.amountNano,
+          memo: `Order-${order.id}`,
+        });
+        link = intent.uri;
+        qrText = intent.qrText;
+      }
 
       // Update order with memo
       await db
@@ -82,8 +98,8 @@ export async function payRoutes(app: FastifyInstance) {
         address: skuConfig.recipient,
         amountNano: skuConfig.amountNano,
         memo: `Order-${order.id}`,
-        link: intent.uri,
-        qrText: intent.qrText,
+        link,
+        qrText,
       });
     } catch (e) {
       req.log.warn({ err: e }, "pay: configuration error");
