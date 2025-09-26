@@ -3,7 +3,7 @@ import cors from "@fastify/cors";
 // import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { getDb } from "./db/client";
-import { eq, sql } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import {
   merchants as tMerchants,
   passes as tPasses,
@@ -43,27 +43,20 @@ const UpdateOrderTx = z.object({
 export async function buildServer() {
   const app = fastify({ logger: true });
   await app.register(cors, {
-    // Accept localhost and any ngrok-free.app subdomain over http/https
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true); // curl/Postman/same-origin
-      const ok =
-        origin === "http://localhost:3000" ||
-        origin === "https://localhost:3000" ||
-        /^https?:\/\/[a-z0-9-]+\.ngrok-free\.app$/i.test(origin);
-      cb(null, ok);
-    },
-
-    // Be explicit: browsers preflight PATCH with these headers
+    origin: [
+      "http://localhost:3000",
+      "https://localhost:4000",
+      "https://linkpass-web.onrender.com",
+      "https://linkpass-api.onrender.com",
+      "*"
+    ],
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Accept", "Authorization", "ngrok-skip-browser-warning"],
     exposedHeaders: ["Content-Type"],
     maxAge: 86400,
-
-    // Handle OPTIONS automatically; don’t fail strict checks in dev
     preflight: true,
     strictPreflight: false,
-
-    credentials: false, // keep false unless you use cookies
+    credentials: false,
   });
 
   await app.register(payRoutes);
