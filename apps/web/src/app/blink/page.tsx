@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 
-const BLINK_URL = process.env.NEXT_PUBLIC_API_URL 
-  ? `${process.env.NEXT_PUBLIC_API_URL}/api/actions/buy-pass`
-  : "http://localhost:4000/api/actions/buy-pass";
+const BLINK_URL = process.env.NEXT_PUBLIC_BASE_URL
+  ? `${process.env.NEXT_PUBLIC_BASE_URL}/api/actions/buy-pass`
+  : ""; // Empty string fallback, forces error if not set
 
 export default function BlinkPage() {
   const [copied, setCopied] = useState(false);
