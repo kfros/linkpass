@@ -44,3 +44,4 @@ apps/*/.env
 !.env.example
 !apps/*/.env.example
 apps/api/node_modules/*
+apps/web/node_modules/*
