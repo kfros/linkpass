@@ -59,8 +59,10 @@ async makePaymentIntent(input: PaymentIntentInput): Promise<PaymentIntent> {
     instructions: [...computeIxs, transferIx],
   }).compileToV0Message();
 
-  const transaction = new VersionedTransaction(message);
-  const base64Transaction = Buffer.from(transaction.serialize()).toString("base64");
+const transaction = new VersionedTransaction(message);
+const base64Transaction = Buffer.from(
+  transaction.serialize()
+).toString("base64");
 
   // For Blinks we return the action endpoint; wallets will POST to it
   const blinkUrl = this.createBlinkUrl("", memo);

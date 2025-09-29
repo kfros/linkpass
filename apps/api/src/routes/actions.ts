@@ -69,100 +69,89 @@ export async function actionsRoutes(app: FastifyInstance) {
 
   // POST /api/actions/buy-pass - Returns serialized transaction
   app.post("/api/actions/buy-pass", async (req, reply) => {
-    try {
-      const { account } = req.body as ActionPostRequest;
+  try {
+    // --- CORS & content type early ---
+    reply
+      .header("Access-Control-Allow-Origin", "*")
+      .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+      // include common Dialect/extension headers to avoid preflight rejections
+      .header("Access-Control-Allow-Headers",
+              "Content-Type, X-Requested-With, x-dialect-sdk-version, x-dialect-app-id")
+      .type("application/json");
 
-      if (!account)
-        return reply
-          .code(400)
-          .send({ error: "Missing required field: account" });
-      try {
-        new PublicKey(account);
-      } catch {
-        return reply
-          .code(400)
-          .send({ error: "Invalid Solana account address" });
-      }
+    const { account } = req.body as { account?: string };
+    if (!account) return reply.code(400).send({ error: "Missing field 'account'" });
 
-      const db = await getDb();
+    // Validate payer pubkey
+    new PublicKey(account);
 
-      // Create the order first
-      const [order] = await db
-        .insert(orders)
-        .values({
-          merchantId: 1,
-          sku: "vip-pass",
-          amount: 0,
-          amountNano: BigInt("500000000"), // 0.5 SOL
-          chain: "sol",
-          status: "paying",
-          toAddress:
-            process.env.SOLANA_RECIPIENT_ADDRESS ||
-            "11111111111111111111111111111111",
-          memo: `Order-${Date.now()}`,
-        })
-        .returning();
+    const db = await getDb();
 
-      // Finalize the memo
-      const memo = `Order-${order.id}`;
-      await db.update(orders).set({ memo }).where(eq(orders.id, order.id));
+    // Create order
+    const [order] = await db.insert(orders).values({
+      merchantId: 1,
+      sku: "vip-pass",
+      amount: 0,
+      amountNano: BigInt("500000000"), // 0.5 SOL
+      chain: "sol",
+      status: "paying",
+      toAddress: process.env.SOLANA_RECIPIENT_ADDRESS!,
+      memo: `Order-${Date.now()}`,
+    }).returning();
 
-      // Build the UNSIGNED tx and return it directly
-      const gw = getGateway("SOL");
-      const { base64Transaction } = await gw
-        .makePaymentIntent({
-          to:
-            process.env.SOLANA_RECIPIENT_ADDRESS ||
-            "11111111111111111111111111111111",
-          amountNano: "500000000", // 0.5 SOL
-          memo,
-          from: account,
-        })
-        .then((x) => ({
-          base64Transaction:
-            (x as any).debug?.base64Transaction || (x as any).base64Transaction,
-        }));
+    const memo = `Order-${order.id}`;
+    await db.update(orders).set({ memo }).where(eq(orders.id, order.id));
 
-      if (!base64Transaction)
-        throw new Error("Failed to construct transaction");
+    // --- Build the unsigned VersionedTransaction ----
+    const gw = getGateway("SOL");
 
-      reply.header("Access-Control-Allow-Origin", "*");
-      reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-      reply.header("Access-Control-Allow-Headers", "Content-Type");
+    // Make sure your gateway uses:
+    // - ComputeUnitLimit + ComputeUnitPrice({ microLamports: 1000 })
+    // - getLatestBlockhash({ commitment: "finalized" })
+    // - serialize({ requireAllSignatures: false })  <-- important for unsigned tx
+    const intent = await gw.makePaymentIntent({
+      to: process.env.SOLANA_RECIPIENT_ADDRESS!,
+      amountNano: "500000000",
+      memo,
+      from: account,
+    });
 
-      const response: ActionPostResponse & { orderId: number } = {
-        transaction: base64Transaction,
-        message: `VIP Pass purchase created! Order ID: ${order.id}`,
-        orderId: order.id,
-      };
-      return reply
-  .header("Access-Control-Allow-Origin", "*")
-  .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-  .header("Access-Control-Allow-Headers", "Content-Type")
-  .type("application/json")
-  .send({
-    transaction: base64Transaction,
-    message: "VIP Pass created. Completing payment…",
-    // optional: links shown after success
-    links: {
-      actions: [
-        { label: "View on Explorer", href: "https://explorer.solana.com/tx/{SIGNATURE}?cluster=devnet", type: "external" },
-      ],
-    },
-  });
-    } catch (error) {
-      req.log.info({ error }, "Error creating Blink transaction");
-      reply.header("Access-Control-Allow-Origin", "*");
-      reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-      reply.header("Access-Control-Allow-Headers", "Content-Type");
-      return reply
-        .code(500)
-        .send({
-          error: "Failed to create transaction",
-          details: (error as Error).message,
-        });
-    }
-  });
+    // prefer a direct field; otherwise take from debug
+    const base64Tx: string =
+      (intent as any).base64Transaction ??
+      (intent as any).debug?.base64Transaction;
+
+    if (!base64Tx) throw new Error("Failed to construct unsigned transaction");
+
+    // --- Return exactly what Dialect expects ---
+    // Keep it to { transaction, message [, links] }. No extra fields.
+    return reply.code(200).send({
+      transaction: base64Tx,
+      message: "VIP Pass created. Completing payment…",
+      // Optional: success links; {SIGNATURE} will be replaced by Dialect
+      links: {
+        actions: [
+          {
+            label: "View on Explorer",
+            href: "https://explorer.solana.com/tx/{SIGNATURE}?cluster=devnet",
+            type: "external",
+          },
+        ],
+      },
+    });
+
+  } catch (error) {
+    req.log.error({ error }, "Error creating Blink transaction");
+    return reply
+      .header("Access-Control-Allow-Origin", "*")
+      .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+      .header("Access-Control-Allow-Headers",
+              "Content-Type, X-Requested-With, x-dialect-sdk-version, x-dialect-app-id")
+      .type("application/json")
+      .code(500)
+      .send({ error: "Failed to create transaction", details: (error as Error).message });
+  }
+});
 
   // GET /api/actions/buy-pass/:orderId/status - Check order status
   app.get("/api/actions/buy-pass/:orderId/status", async (req, reply) => {
