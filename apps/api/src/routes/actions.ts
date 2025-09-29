@@ -30,7 +30,7 @@ const MEMO_PROGRAM_ID = new PublicKey(
   "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 );
 const LAMPORTS = 1_000_000_000;
-const PRICE_SOL = 0.5;
+const PRICE_SOL = 0.1;
 const PRICE_LAMPORTS = Math.round(PRICE_SOL * LAMPORTS);
 
 type NewOrder = InferInsertModel<typeof orders>;
