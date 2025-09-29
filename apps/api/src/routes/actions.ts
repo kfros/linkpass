@@ -37,7 +37,7 @@ const MEMO_PROGRAM_ID = new PublicKey(
   "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 );
 const LAMPORTS = 1_000_000_000;
-const PRICE_SOL = 0.5;
+const PRICE_SOL = 0.01;
 const PRICE_LAMPORTS = Math.round(PRICE_SOL * LAMPORTS);
 
 type NewOrder = InferInsertModel<typeof orders>;
@@ -54,7 +54,7 @@ const ACTION_VERSION = "2.4"; // keep in sync with your lib
 
 function withActionHeaders(reply: any) {
   const caip = CLUSTER === "mainnet" ? CAIP_SOLANA_MAINNET : CAIP_SOLANA_DEVNET;
-   return reply
+  return reply
     .header("Access-Control-Allow-Origin", "*")
     .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
     .header(
@@ -62,7 +62,10 @@ function withActionHeaders(reply: any) {
       // include Dial + Actions headers explicitly
       "Content-Type, X-Requested-With, x-dialect-sdk-version, x-dialect-app-id, x-blink-client-key"
     )
-    .header("Access-Control-Expose-Headers", "X-Action-Version, X-Blockchain-Ids")
+    .header(
+      "Access-Control-Expose-Headers",
+      "X-Action-Version, X-Blockchain-Ids"
+    )
     .header("X-Action-Version", "2.4")
     .header("X-Blockchain-Ids", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1") // devnet
     .header("Cache-Control", "no-store")
@@ -150,7 +153,7 @@ export async function actionsRoutes(app: FastifyInstance) {
       const connection = new Connection(DEVNET_RPC, "confirmed");
       const computeIxs = [
         ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000 }),
+        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10_000 }),
       ];
       const transferIx = SystemProgram.transfer({
         fromPubkey: payer,
@@ -195,34 +198,30 @@ export async function actionsRoutes(app: FastifyInstance) {
         transaction: base64,
         message: "VIP Pass created. Completing payment…",
       };
-      //   const sim = await connection.simulateTransaction(tx, {
-      //     replaceRecentBlockhash: true,
-      //     sigVerify: false,
-      //   });
-
-      //   if (sim.value.err) {
-      //     req.log.warn(
-      //       { err: sim.value.err, logs: sim.value.logs },
-      //       "preflight simulation failed"
-      //     );
-      //     return reply
-      //       .code(400)
-      //       .type("application/json")
-      //       .send({
-      //         error: "SIMULATION_FAILED",
-      //         details: sim.value.err,
-      //         logs: sim.value.logs?.slice(-10) ?? [],
-      //       });
-      // }
+      const sim = await connection.simulateTransaction(tx, {
+        replaceRecentBlockhash: true,
+        sigVerify: false,
+      });
+      if (sim.value.err) {
+        req.log.warn(
+          { err: sim.value.err, logs: sim.value.logs?.slice(-10) },
+          "sim failed"
+        );
+        return reply.code(400).send({
+          error: "SIMULATION_FAILED",
+          details: sim.value.err,
+          logs: sim.value.logs?.slice(-10) ?? [],
+        });
+      }
 
       //   req.log.info({ base64Len: base64.length }, "POST /buy-pass out");
 
       // ❸ Return per Actions spec
       return reply.send({
-  type: "transaction",                 // REQUIRED by some clients
-  transaction: base64,         // from tx.serialize()
-  message: "VIP Pass created. Completing payment…"
-});
+        type: "transaction", // REQUIRED by some clients
+        transaction: base64, // from tx.serialize()
+        message: "VIP Pass created. Completing payment…",
+      });
     } catch (e: any) {
       req.log.error({ e }, "POST /buy-pass failed");
       return withCORS(reply)
