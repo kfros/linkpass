@@ -31,15 +31,15 @@ interface ActionPostResponse {
 }
 
 export async function actionsRoutes(app: FastifyInstance) {
-
   // GET /api/actions/buy-pass - Returns action metadata
   app.get("/api/actions/buy-pass", async (req, reply) => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-    
+
     const response: ActionGetResponse = {
       icon: `${apiUrl}/icon.png`,
       label: "Buy VIP Pass",
-      description: "Purchase a VIP pass with Solana. One-click payment via Blink!",
+      description:
+        "Purchase a VIP pass with Solana. One-click payment via Blink!",
       title: "LinkPass - VIP Pass",
       links: {
         actions: [
@@ -55,7 +55,7 @@ export async function actionsRoutes(app: FastifyInstance) {
     reply.header("Access-Control-Allow-Origin", "*");
     reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     reply.header("Access-Control-Allow-Headers", "Content-Type");
-    
+
     return reply.send(response);
   });
 
@@ -68,68 +68,94 @@ export async function actionsRoutes(app: FastifyInstance) {
   });
 
   // POST /api/actions/buy-pass - Returns serialized transaction
-app.post("/api/actions/buy-pass", async (req, reply) => {
-  try {
-    const { account } = req.body as ActionPostRequest;
+  app.post("/api/actions/buy-pass", async (req, reply) => {
+    try {
+      const { account } = req.body as ActionPostRequest;
 
-    if (!account) return reply.code(400).send({ error: "Missing required field: account" });
-    try { new PublicKey(account); } catch { return reply.code(400).send({ error: "Invalid Solana account address" }); }
+      if (!account)
+        return reply
+          .code(400)
+          .send({ error: "Missing required field: account" });
+      try {
+        new PublicKey(account);
+      } catch {
+        return reply
+          .code(400)
+          .send({ error: "Invalid Solana account address" });
+      }
 
-    const db = await getDb();
+      const db = await getDb();
 
-    // Create the order first
-    const [order] = await db.insert(orders).values({
-      merchantId: 1,
-      sku: "vip-pass",
-      amount: 0,
-      amountNano: BigInt("500000000"), // 0.5 SOL
-      chain: "sol",
-      status: "paying",
-      toAddress: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
-      memo: `Order-${Date.now()}`,
-    }).returning();
+      // Create the order first
+      const [order] = await db
+        .insert(orders)
+        .values({
+          merchantId: 1,
+          sku: "vip-pass",
+          amount: 0,
+          amountNano: BigInt("500000000"), // 0.5 SOL
+          chain: "sol",
+          status: "paying",
+          toAddress:
+            process.env.SOLANA_RECIPIENT_ADDRESS ||
+            "11111111111111111111111111111111",
+          memo: `Order-${Date.now()}`,
+        })
+        .returning();
 
-    // Finalize the memo
-    const memo = `Order-${order.id}`;
-    await db.update(orders).set({ memo }).where(eq(orders.id, order.id));
+      // Finalize the memo
+      const memo = `Order-${order.id}`;
+      await db.update(orders).set({ memo }).where(eq(orders.id, order.id));
 
-    // Build the UNSIGNED tx and return it directly
-    const gw = getGateway("SOL");
-    const { base64Transaction } = await gw.makePaymentIntent({
-      to: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
-      amountNano: "500000000", // 0.5 SOL
-      memo,
-      from: account,
-    }).then(x => ({ base64Transaction: (x as any).debug?.base64Transaction || (x as any).base64Transaction }));
+      // Build the UNSIGNED tx and return it directly
+      const gw = getGateway("SOL");
+      const { base64Transaction } = await gw
+        .makePaymentIntent({
+          to:
+            process.env.SOLANA_RECIPIENT_ADDRESS ||
+            "11111111111111111111111111111111",
+          amountNano: "500000000", // 0.5 SOL
+          memo,
+          from: account,
+        })
+        .then((x) => ({
+          base64Transaction:
+            (x as any).debug?.base64Transaction || (x as any).base64Transaction,
+        }));
 
-    if (!base64Transaction) throw new Error("Failed to construct transaction");
+      if (!base64Transaction)
+        throw new Error("Failed to construct transaction");
 
-    reply.header("Access-Control-Allow-Origin", "*");
-    reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    reply.header("Access-Control-Allow-Headers", "Content-Type");
+      reply.header("Access-Control-Allow-Origin", "*");
+      reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      reply.header("Access-Control-Allow-Headers", "Content-Type");
 
-    const response: ActionPostResponse & { orderId: number } = {
-      transaction: base64Transaction,
-      message: `VIP Pass purchase created! Order ID: ${order.id}`,
-      orderId: order.id,
-    };
-    return reply.send(response);
-
-  } catch (error) {
-    req.log.info({ error }, "Error creating Blink transaction");
-    reply.header("Access-Control-Allow-Origin", "*");
-    reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    reply.header("Access-Control-Allow-Headers", "Content-Type");
-    return reply.code(500).send({ error: "Failed to create transaction", details: (error as Error).message });
-  }
-});
+      const response: ActionPostResponse & { orderId: number } = {
+        transaction: base64Transaction,
+        message: `VIP Pass purchase created! Order ID: ${order.id}`,
+        orderId: order.id,
+      };
+      return reply.send(response);
+    } catch (error) {
+      req.log.info({ error }, "Error creating Blink transaction");
+      reply.header("Access-Control-Allow-Origin", "*");
+      reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      reply.header("Access-Control-Allow-Headers", "Content-Type");
+      return reply
+        .code(500)
+        .send({
+          error: "Failed to create transaction",
+          details: (error as Error).message,
+        });
+    }
+  });
 
   // GET /api/actions/buy-pass/:orderId/status - Check order status
   app.get("/api/actions/buy-pass/:orderId/status", async (req, reply) => {
     try {
       const { orderId } = req.params as { orderId: string };
       const db = await getDb();
-      
+
       const order = await db.query.orders.findFirst({
         where: (t, { eq }) => eq(t.id, Number(orderId)),
       });
@@ -154,9 +180,9 @@ app.post("/api/actions/buy-pass", async (req, reply) => {
       });
     } catch (error) {
       req.log.info({ error }, "Error checking order status");
-      
+
       reply.header("Access-Control-Allow-Origin", "*");
-      
+
       return reply.code(500).send({
         error: "Failed to check order status",
         details: (error as Error).message,

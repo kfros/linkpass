@@ -30,101 +30,57 @@ export class SolanaGateway implements ChainGateway {
     return addr;
   }
 
-  async makePaymentIntent(input: PaymentIntentInput): Promise<PaymentIntent> {
-  const { to, amountNano, memo, from, disableMemo } = input;
-    assert(to, "Solana: 'to' is required");
-    assert(/^[\d]+$/.test(String(amountNano)), "Solana: amountNano must be an integer string");
+async makePaymentIntent(input: PaymentIntentInput): Promise<PaymentIntent> {
+  const { to, amountNano, memo, from } = input;
+  if (!from) throw new Error("Sender public key ('from') is required for Blink/Dial.to payments");
+  if (!/^[\d]+$/.test(String(amountNano))) throw new Error("Solana: amountNano must be an integer string");
 
-    const connection = this.getConnection();
-    const recipient = this.getRecipientAddress();
-    const lamports = Number(BigInt(amountNano));
+  const connection = this.getConnection();
+  const payer = new PublicKey(from);
+  const receiver = new PublicKey(this.getRecipientAddress());
+  const lamports = Number(BigInt(amountNano));
 
-    if (!from) {
-      throw new Error("Sender public key ('from') is required for Blink/Dial.to payments");
-    }
-    const payer = new PublicKey(from);
-    const receiver = new PublicKey(recipient);
+  if (receiver.toBase58() === "11111111111111111111111111111111") {
+    throw new Error("Recipient address is not set. Configure SOLANA_RECIPIENT_ADDRESS.");
+  }
 
-    const computeIxs = [
+  // Add compute budget so wallets won't mutate your tx during simulation
+  const computeIxs = [
     ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
     ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }),
   ];
 
-   const transferIx = SystemProgram.transfer({
-    fromPubkey: payer,
-    toPubkey: receiver,
-    lamports,
-  });
+  const transferIx = SystemProgram.transfer({ fromPubkey: payer, toPubkey: receiver, lamports });
 
-    if (receiver.toBase58() === "11111111111111111111111111111111") {
-      throw new Error("Recipient address is not set. Please configure SOLANA_RECIPIENT_ADDRESS for devnet.");
-    }
+  const { blockhash } = await connection.getLatestBlockhash({ commitment: "finalized" });
+  const message = new TransactionMessage({
+    payerKey: payer,
+    recentBlockhash: blockhash,
+    instructions: [...computeIxs, transferIx],
+  }).compileToV0Message();
 
-    // Prepare instructions
-    const instructions = [
-      SystemProgram.transfer({
-        fromPubkey: payer,
-        toPubkey: receiver,
-        lamports: Number(lamports),
-      })
-    ];
-    // Optionally add memo (not recommended for minimal compatibility)
-    if (memo && !disableMemo) {
-      // Memo is not included in official Dialect example, but can be added if needed
-      // const memoProgram = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-      // instructions.push(new TransactionInstruction({
-      //   keys: [],
-      //   programId: memoProgram,
-      //   data: Buffer.from(memo, "utf8"),
-      // }));
-    }
+  const transaction = new VersionedTransaction(message);
+  const base64Transaction = Buffer.from(transaction.serialize()).toString("base64");
 
-    // Get latest blockhash
-    const { blockhash } = await connection.getLatestBlockhash();
+  // For Blinks we return the action endpoint; wallets will POST to it
+  const blinkUrl = this.createBlinkUrl("", memo);
 
-    // Create TransactionMessage and VersionedTransaction
-    const message = new TransactionMessage({
-      payerKey: payer,
-      recentBlockhash: blockhash,
-      instructions: [...computeIxs, transferIx],
-    }).compileToV0Message();
-    const transaction = new VersionedTransaction(message);
+  return {
+    uri: blinkUrl,
+    qrText: blinkUrl,
+    memo,
+    debug: { base64Transaction },
+    // (optionally also expose base64Transaction top-level if you prefer)
+  } as any;
+}
 
-    // Serialize transaction for Blink
-    const base64Transaction = Buffer.from(transaction.serialize()).toString("base64");
-
-    // Log transaction and debug output for debugging
-    const debugOutput = {
-      base64Transaction,
-      disableMemo,
-    };
-    console.log("Serialized Solana transaction (base64):", base64Transaction);
-    console.log("Debug output:", debugOutput);
-
-    // Create Blink-compatible URI
-    const blinkUrl = this.createBlinkUrl(base64Transaction, memo);
-
-    return {
-      uri: blinkUrl,
-      qrText: blinkUrl,
-      memo,
-      debug: {
-        base64Transaction,
-        disableMemo,
-      },
-    };
-  }
-
-  private createBlinkUrl(serializedTx: string, memo?: string): string {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:4000";
-    const actionUrl = `${baseUrl}/api/actions/buy-pass`;
-    
-    const params = new URLSearchParams();
-    params.set("tx", serializedTx);
-    if (memo) params.set("memo", memo);
-    
-    return `${actionUrl}?${params.toString()}`;
-  }
+private createBlinkUrl(_serializedTx?: string, memo?: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:4000";
+  const actionUrl = `${baseUrl}/api/actions/buy-pass`;
+  const params = new URLSearchParams();
+  if (memo) params.set("memo", memo); // memo in URL is optional/for logging; not used by wallet
+  return `${actionUrl}${params.size ? `?${params.toString()}` : ""}`;
+}
 
   async findIncoming(input: FindIncomingInput): Promise<FindIncomingResult | null> {
     const { to, amountNano, memo, notOlderThanMs = 10 * 60 * 1000 } = input;
