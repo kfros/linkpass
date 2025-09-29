@@ -135,7 +135,16 @@ export async function actionsRoutes(app: FastifyInstance) {
         message: `VIP Pass purchase created! Order ID: ${order.id}`,
         orderId: order.id,
       };
-      return reply.send(response);
+      return reply.type("application/json").send({
+    transaction: base64Transaction,
+    message: "VIP Pass created. Completing payment…",
+    // optional: links shown after success
+    links: {
+      actions: [
+        { label: "View on Explorer", href: "https://explorer.solana.com/tx/{SIGNATURE}?cluster=devnet", type: "external" },
+      ],
+    },
+  });
     } catch (error) {
       req.log.info({ error }, "Error creating Blink transaction");
       reply.header("Access-Control-Allow-Origin", "*");

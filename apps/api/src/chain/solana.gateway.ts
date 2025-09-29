@@ -47,7 +47,7 @@ async makePaymentIntent(input: PaymentIntentInput): Promise<PaymentIntent> {
   // Add compute budget so wallets won't mutate your tx during simulation
   const computeIxs = [
     ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
-    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }),
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000 }),
   ];
 
   const transferIx = SystemProgram.transfer({ fromPubkey: payer, toPubkey: receiver, lamports });
