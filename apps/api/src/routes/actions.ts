@@ -153,7 +153,7 @@ export async function actionsRoutes(app: FastifyInstance) {
       const connection = new Connection(DEVNET_RPC, "confirmed");
       const computeIxs = [
         ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10_000 }),
+        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100_000 }),
       ];
       const transferIx = SystemProgram.transfer({
         fromPubkey: payer,
