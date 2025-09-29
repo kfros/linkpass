@@ -54,12 +54,18 @@ const ACTION_VERSION = "2.4"; // keep in sync with your lib
 
 function withActionHeaders(reply: any) {
   const caip = CLUSTER === "mainnet" ? CAIP_SOLANA_MAINNET : CAIP_SOLANA_DEVNET;
-  return reply
-    .headers({
-      ...ACTIONS_CORS_HEADERS, // CORS + cache headers Dialect expects
-      "x-blockchain-ids": caip, // CAIP-2 chain id
-      "x-action-version": ACTION_VERSION, // current Actions version used in docs
-    })
+   return reply
+    .header("Access-Control-Allow-Origin", "*")
+    .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+    .header(
+      "Access-Control-Allow-Headers",
+      // include Dial + Actions headers explicitly
+      "Content-Type, X-Requested-With, x-dialect-sdk-version, x-dialect-app-id, x-blink-client-key"
+    )
+    .header("Access-Control-Expose-Headers", "X-Action-Version, X-Blockchain-Ids")
+    .header("X-Action-Version", "2.4")
+    .header("X-Blockchain-Ids", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1") // devnet
+    .header("Cache-Control", "no-store")
     .type("application/json");
 }
 
