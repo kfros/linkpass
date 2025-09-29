@@ -124,12 +124,24 @@ export async function actionsRoutes(app: FastifyInstance) {
         ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
         ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000 }),
       ];
-
       const transferIx = SystemProgram.transfer({
         fromPubkey: payer,
         toPubkey: receiver,
         lamports: PRICE_LAMPORTS,
       });
+
+      const bal = await connection.getBalance(payer).catch(() => 0);
+      req.log.info(
+        { payer: payer.toBase58(), bal },
+        "payer balance (lamports)"
+      );
+      if (bal < 600_000_000) {
+        return reply.code(400).send({
+          error: "INSUFFICIENT_FUNDS_DEVNET",
+          details: "Need ≥0.6 SOL on devnet for a 0.5 SOL purchase.",
+          faucet: "https://faucet.solana.com/?cluster=devnet",
+        });
+      }
 
       const memoIx = new TransactionInstruction({
         programId: MEMO_PROGRAM_ID,
@@ -150,45 +162,69 @@ export async function actionsRoutes(app: FastifyInstance) {
       const tx = new VersionedTransaction(msg);
       const base64 = Buffer.from(tx.serialize()).toString("base64");
 
+      const sim = await connection.simulateTransaction(tx, {
+        replaceRecentBlockhash: true,
+        sigVerify: false,
+      });
+
+      if (sim.value.err) {
+        req.log.warn(
+          { err: sim.value.err, logs: sim.value.logs },
+          "preflight simulation failed"
+        );
+        return reply
+          .code(400)
+          .type("application/json")
+          .send({
+            error: "SIMULATION_FAILED",
+            details: sim.value.err,
+            logs: sim.value.logs?.slice(-10) ?? [],
+          });
+      }
+
       req.log.info({ base64Len: base64.length }, "POST /buy-pass out");
 
       // ❸ Return per Actions spec
       return reply.send({
-      transaction: base64,        // base64 of VersionedTransaction
-      message: "VIP Pass created. Completing payment…",
+        transaction: base64, // base64 of VersionedTransaction
+        message: "VIP Pass created. Completing payment…",
       });
-    }  catch (e: any) {
-    req.log.error({ e }, "POST /buy-pass failed");
-    return withCORS(reply).code(500).send({ error: "Failed to create transaction", details: e?.message });
-  }
-});
+    } catch (e: any) {
+      req.log.error({ e }, "POST /buy-pass failed");
+      return withCORS(reply)
+        .code(500)
+        .send({ error: "Failed to create transaction", details: e?.message });
+    }
+  });
 
   // GET /api/actions/buy-pass/:orderId/status - Check order status
   app.get("/api/actions/buy-pass", async (req, reply) => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-  const cluster = (process.env.SOLANA_CLUSTER ?? "devnet").toLowerCase();
-  const sig = (req.query as any)?.transaction as string | undefined;
-  req.log.info({ url: req.url, q: req.query }, "GET /buy-pass");
+    const cluster = (process.env.SOLANA_CLUSTER ?? "devnet").toLowerCase();
+    const sig = (req.query as any)?.transaction as string | undefined;
+    req.log.info({ url: req.url, q: req.query }, "GET /buy-pass");
 
-  if (sig) {
-    // 🔎 log so you can see if Dialect called back with the signature
-    req.log.info({ sig }, "Dialect success callback");
-    return withCORS(reply).send({
-      icon: `${apiUrl}/icon.png`,
-      title: "LinkPass - VIP Pass",
-      label: "Paid ✔",
-      description: "Payment received. Your VIP Pass will arrive shortly.",
-      links: {
-        actions: [
-          {
-            label: "View on Explorer",
-            href: `https://explorer.solana.com/tx/${sig}${cluster === "mainnet" ? "" : `?cluster=${cluster}`}`,
-            type: "post",
-          },
-        ],
-      },
-    });
-  }
+    if (sig) {
+      // 🔎 log so you can see if Dialect called back with the signature
+      req.log.info({ sig }, "Dialect success callback");
+      return withCORS(reply).send({
+        icon: `${apiUrl}/icon.png`,
+        title: "LinkPass - VIP Pass",
+        label: "Paid ✔",
+        description: "Payment received. Your VIP Pass will arrive shortly.",
+        links: {
+          actions: [
+            {
+              label: "View on Explorer",
+              href: `https://explorer.solana.com/tx/${sig}${
+                cluster === "mainnet" ? "" : `?cluster=${cluster}`
+              }`,
+              type: "post",
+            },
+          ],
+        },
+      });
+    }
     // ------- default metadata (no tx yet) -------
     const meta: ActionGetResponse = {
       icon: `${API_BASE}/icon.png`,
