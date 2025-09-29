@@ -8,9 +8,10 @@ import type {
 import {
   Connection,
   PublicKey,
+  LAMPORTS_PER_SOL,
   SystemProgram,
-  Transaction,
-  TransactionInstruction,
+  TransactionMessage,
+  VersionedTransaction,
 } from "@solana/web3.js";
 import assert from "node:assert/strict";
 
@@ -37,54 +38,56 @@ export class SolanaGateway implements ChainGateway {
     const recipient = this.getRecipientAddress();
     const lamports = BigInt(amountNano);
 
-    // Use the sender's wallet public key from 'from' ONLY; throw if not provided
     if (!from) {
       throw new Error("Sender public key ('from') is required for Blink/Dial.to payments");
     }
-    const userPubkey = new PublicKey(from);
+    const payer = new PublicKey(from);
+    const receiver = new PublicKey(recipient);
 
-    // Check if recipient address is valid and not the default
-    if (new PublicKey(recipient).toBase58() === "11111111111111111111111111111111") {
+    if (receiver.toBase58() === "11111111111111111111111111111111") {
       throw new Error("Recipient address is not set. Please configure SOLANA_RECIPIENT_ADDRESS for devnet.");
     }
 
-    // Create a basic SOL transfer transaction
-    const transaction = new Transaction();
-    transaction.feePayer = userPubkey;
-    transaction.add(
+    // Prepare instructions
+    const instructions = [
       SystemProgram.transfer({
-        fromPubkey: userPubkey,
-        toPubkey: new PublicKey(recipient),
+        fromPubkey: payer,
+        toPubkey: receiver,
         lamports: Number(lamports),
       })
-    );
-
-    // Add memo instruction if provided and not disabled
+    ];
+    // Optionally add memo (not recommended for minimal compatibility)
     if (memo && !disableMemo) {
-      const memoProgram = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
-      transaction.add(
-        new TransactionInstruction({
-          keys: [],
-          programId: memoProgram,
-          data: Buffer.from(memo, "utf8"),
-        })
-      );
+      // Memo is not included in official Dialect example, but can be added if needed
+      // const memoProgram = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+      // instructions.push(new TransactionInstruction({
+      //   keys: [],
+      //   programId: memoProgram,
+      //   data: Buffer.from(memo, "utf8"),
+      // }));
     }
 
     // Get latest blockhash
     const { blockhash } = await connection.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
+
+    // Create TransactionMessage and VersionedTransaction
+    const message = new TransactionMessage({
+      payerKey: payer,
+      recentBlockhash: blockhash,
+      instructions,
+    }).compileToV0Message();
+    const transaction = new VersionedTransaction(message);
 
     // Serialize transaction for Blink
-    const serializedTransaction = transaction.serialize({
-      requireAllSignatures: false,
-      verifySignatures: false,
-    });
+    const base64Transaction = Buffer.from(transaction.serialize()).toString("base64");
 
-    const base64Transaction = serializedTransaction.toString("base64");
-
-    // Log transaction for debugging
+    // Log transaction and debug output for debugging
+    const debugOutput = {
+      base64Transaction,
+      disableMemo,
+    };
     console.log("Serialized Solana transaction (base64):", base64Transaction);
+    console.log("Debug output:", debugOutput);
 
     // Create Blink-compatible URI
     const blinkUrl = this.createBlinkUrl(base64Transaction, memo);
