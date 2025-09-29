@@ -11,6 +11,7 @@ import {
   LAMPORTS_PER_SOL,
   SystemProgram,
   TransactionMessage,
+  ComputeBudgetProgram,
   VersionedTransaction,
 } from "@solana/web3.js";
 import assert from "node:assert/strict";
@@ -36,13 +37,24 @@ export class SolanaGateway implements ChainGateway {
 
     const connection = this.getConnection();
     const recipient = this.getRecipientAddress();
-    const lamports = BigInt(amountNano);
+    const lamports = Number(BigInt(amountNano));
 
     if (!from) {
       throw new Error("Sender public key ('from') is required for Blink/Dial.to payments");
     }
     const payer = new PublicKey(from);
     const receiver = new PublicKey(recipient);
+
+    const computeIxs = [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }),
+  ];
+
+   const transferIx = SystemProgram.transfer({
+    fromPubkey: payer,
+    toPubkey: receiver,
+    lamports,
+  });
 
     if (receiver.toBase58() === "11111111111111111111111111111111") {
       throw new Error("Recipient address is not set. Please configure SOLANA_RECIPIENT_ADDRESS for devnet.");
@@ -74,7 +86,7 @@ export class SolanaGateway implements ChainGateway {
     const message = new TransactionMessage({
       payerKey: payer,
       recentBlockhash: blockhash,
-      instructions,
+      instructions: [...computeIxs, transferIx],
     }).compileToV0Message();
     const transaction = new VersionedTransaction(message);
 
