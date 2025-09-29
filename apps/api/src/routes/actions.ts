@@ -58,46 +58,7 @@ function withCORS(reply: any) {
 
 export async function actionsRoutes(app: FastifyInstance) {
   // GET /api/actions/buy-pass - Returns action metadata
-app.get("/api/actions/buy-pass", async (req, reply) => {
-    const sig = (req.query as any)?.transaction as string | undefined;
 
-    if (sig) {
-      const success: ActionGetResponse = {
-        icon: `${API_BASE}/icon.png`,
-        title: "LinkPass - VIP Pass",
-        label: "Paid ✔",
-        description: "Payment received. Your VIP Pass will arrive shortly.",
-        links: {
-          actions: [
-            {
-              label: "View on Explorer",
-              href: `https://explorer.solana.com/tx/${sig}${CLUSTER === "mainnet" ? "" : `?cluster=${CLUSTER}`}`,
-              type: "post",
-            },
-          ],
-        },
-      };
-      return withCORS(reply).send(success);
-    }
-
-    const meta: ActionGetResponse = {
-      icon: `${API_BASE}/icon.png`,
-      title: "LinkPass - VIP Pass",
-      label: "Buy VIP Pass",
-      description: "Purchase a VIP pass with Solana. One-click payment via Blink!",
-      links: {
-        actions: [
-          {
-            label: "Buy for 0.5 SOL",
-            href: `${API_BASE}/api/actions/buy-pass`,
-            type: "transaction",
-          },
-        ],
-      },
-    };
-
-    return withCORS(reply).send(meta);
-  });
 
 
   // OPTIONS for CORS
@@ -183,7 +144,7 @@ app.post("/api/actions/buy-pass", async (req, reply) => {
 });
 
   // GET /api/actions/buy-pass/:orderId/status - Check order status
-  app.get("/api/actions/buy-pass", async (req, reply) => {
+app.get("/api/actions/buy-pass", async (req, reply) => {
   const sig = (req.query as any)?.transaction as string | undefined;
 
   // If Dialect is calling back with ?transaction=<signature>, confirm on-chain and close the order
@@ -204,7 +165,7 @@ app.post("/api/actions/buy-pass", async (req, reply) => {
         keys[ix.programIdIndex].toBase58() === MEMO_PROGRAM_ID.toBase58()
       );
       let memoText: string | undefined;
-      if (memoIx) memoText = Buffer.from(memoIx.data).toString("utf8");
+      if (memoIx) memoText = new TextDecoder("utf-8").decode(memoIx.data);
 
       // Parse order id from memo
       const orderId = memoText?.startsWith("order-") ? Number(memoText.slice("order-".length)) : undefined;
@@ -252,6 +213,7 @@ app.post("/api/actions/buy-pass", async (req, reply) => {
       return withCORS(reply).send(fallback);
     }
   }
+
 
   // ------- default metadata (no tx yet) -------
   const meta: ActionGetResponse = {
