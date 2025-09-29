@@ -174,6 +174,8 @@ export async function actionsRoutes(app: FastifyInstance) {
         });
       }
 
+      
+
       const memoIx = new TransactionInstruction({
         programId: MEMO_PROGRAM_ID,
         keys: [],
@@ -191,6 +193,11 @@ export async function actionsRoutes(app: FastifyInstance) {
       }).compileToV0Message();
 
       const tx = new VersionedTransaction(msg);
+      
+      const sim = await connection.simulateTransaction(tx, {
+        replaceRecentBlockhash: true,
+        sigVerify: false,
+      });
       const base64 = Buffer.from(tx.serialize()).toString("base64");
 
       const res: ActionPostResponse & { type: "transaction" } = {
@@ -198,10 +205,6 @@ export async function actionsRoutes(app: FastifyInstance) {
         transaction: base64,
         message: "VIP Pass created. Completing payment…",
       };
-      const sim = await connection.simulateTransaction(tx, {
-        replaceRecentBlockhash: true,
-        sigVerify: false,
-      });
       if (sim.value.err) {
         req.log.warn(
           { err: sim.value.err, logs: sim.value.logs?.slice(-10) },
