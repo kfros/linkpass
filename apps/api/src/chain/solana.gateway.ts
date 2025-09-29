@@ -29,7 +29,7 @@ export class SolanaGateway implements ChainGateway {
   }
 
   async makePaymentIntent(input: PaymentIntentInput): Promise<PaymentIntent> {
-    const { to, amountNano, memo, from } = input;
+  const { to, amountNano, memo, from, disableMemo } = input;
     assert(to, "Solana: 'to' is required");
     assert(/^[\d]+$/.test(String(amountNano)), "Solana: amountNano must be an integer string");
 
@@ -59,8 +59,8 @@ export class SolanaGateway implements ChainGateway {
       })
     );
 
-    // Add memo instruction if provided
-    if (memo) {
+    // Add memo instruction if provided and not disabled
+    if (memo && !disableMemo) {
       const memoProgram = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
       transaction.add(
         new TransactionInstruction({
@@ -83,6 +83,9 @@ export class SolanaGateway implements ChainGateway {
 
     const base64Transaction = serializedTransaction.toString("base64");
 
+    // Log transaction for debugging
+    console.log("Serialized Solana transaction (base64):", base64Transaction);
+
     // Create Blink-compatible URI
     const blinkUrl = this.createBlinkUrl(base64Transaction, memo);
 
@@ -90,6 +93,10 @@ export class SolanaGateway implements ChainGateway {
       uri: blinkUrl,
       qrText: blinkUrl,
       memo,
+      debug: {
+        base64Transaction,
+        disableMemo,
+      },
     };
   }
 
