@@ -242,7 +242,7 @@ export async function actionsRoutes(app: FastifyInstance) {
       // 🔎 log so you can see if Dialect called back with the signature
       req.log.info({ sig }, "Dialect success callback");
       const success: ActionGetResponse = {
-        icon: `${apiUrl}/public/icon.png`,
+        icon: `${apiUrl}/icon.png`,
         title: "LinkPass - VIP Pass",
         label: "Paid ✔",
         description: "Payment received. Your VIP Pass will arrive shortly.",
