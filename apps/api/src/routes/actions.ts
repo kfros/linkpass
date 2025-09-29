@@ -15,6 +15,13 @@ import {
   ComputeBudgetProgram,
   TransactionInstruction,
 } from "@solana/web3.js";
+import {
+  ACTIONS_CORS_HEADERS,
+  BLOCKCHAIN_IDS,
+  type ActionGetResponse,
+  type ActionPostRequest,
+  type ActionPostResponse,
+} from "@solana/actions";
 import { getDb } from "../db/client";
 import { orders } from "../db/schema.js";
 import { eq, InferInsertModel } from "drizzle-orm";
@@ -30,7 +37,7 @@ const MEMO_PROGRAM_ID = new PublicKey(
   "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 );
 const LAMPORTS = 1_000_000_000;
-const PRICE_SOL = 0.1;
+const PRICE_SOL = 0.5;
 const PRICE_LAMPORTS = Math.round(PRICE_SOL * LAMPORTS);
 
 type NewOrder = InferInsertModel<typeof orders>;
@@ -41,24 +48,34 @@ function explorerTxUrl(sig: string) {
   }`;
 }
 
-// Solana Actions spec types
-interface ActionGetResponse {
-  icon: string;
-  label: string;
-  description: string;
-  title: string;
-  disabled?: boolean;
-  links?: {
-    actions: Array<{
-      label: string;
-      href: string;
-      type?: "transaction" | "post";
-    }>;
-  };
+function withActionHeaders(reply: any) {
+  return reply
+    .headers({
+      ...ACTIONS_CORS_HEADERS,       // CORS + cache headers Dialect expects
+      "x-blockchain-ids": BLOCKCHAIN_IDS, // CAIP-2 chain id
+      "x-action-version": "2.4",      // current Actions version used in docs
+    })
+    .type("application/json");
 }
 
-type ActionPostRequest = { account: string };
-type ActionPostResponse = { transaction: string; message?: string };
+// Solana Actions spec types
+// interface ActionGetResponse {
+//   icon: string;
+//   label: string;
+//   description: string;
+//   title: string;
+//   disabled?: boolean;
+//   links?: {
+//     actions: Array<{
+//       label: string;
+//       href: string;
+//       type?: "transaction" | "post";
+//     }>;
+//   };
+// }
+
+// type ActionPostRequest = { account: string };
+// type ActionPostResponse = { transaction: string; message?: string };
 
 function withCORS(reply: any) {
   return reply
@@ -76,17 +93,17 @@ export async function actionsRoutes(app: FastifyInstance) {
 
   // OPTIONS for CORS
   app.options("/api/actions/buy-pass", async (_req, reply) => {
-    return withCORS(reply).code(200).send();
+    return withActionHeaders(reply).code(200).send(null);
   });
 
   // POST /api/actions/buy-pass - Returns serialized transaction
   app.post("/api/actions/buy-pass", async (req, reply) => {
     try {
-      withCORS(reply);
+      withActionHeaders(reply);
 
       req.log.info({ body: req.body }, "POST /buy-pass in");
 
-      const { account } = req.body as { account?: string };
+      const { account } = req.body as ActionPostRequest;
       if (!account)
         return reply.code(400).send({ error: "Missing field 'account'" });
 
@@ -162,33 +179,35 @@ export async function actionsRoutes(app: FastifyInstance) {
       const tx = new VersionedTransaction(msg);
       const base64 = Buffer.from(tx.serialize()).toString("base64");
 
-      const sim = await connection.simulateTransaction(tx, {
-        replaceRecentBlockhash: true,
-        sigVerify: false,
-      });
+const res: ActionPostResponse & { type: "transaction" } = {
+      type: "transaction",
+      transaction: base64,
+      message: "VIP Pass created. Completing payment…",
+    };
+    //   const sim = await connection.simulateTransaction(tx, {
+    //     replaceRecentBlockhash: true,
+    //     sigVerify: false,
+    //   });
 
-      if (sim.value.err) {
-        req.log.warn(
-          { err: sim.value.err, logs: sim.value.logs },
-          "preflight simulation failed"
-        );
-        return reply
-          .code(400)
-          .type("application/json")
-          .send({
-            error: "SIMULATION_FAILED",
-            details: sim.value.err,
-            logs: sim.value.logs?.slice(-10) ?? [],
-          });
-      }
+    //   if (sim.value.err) {
+    //     req.log.warn(
+    //       { err: sim.value.err, logs: sim.value.logs },
+    //       "preflight simulation failed"
+    //     );
+    //     return reply
+    //       .code(400)
+    //       .type("application/json")
+    //       .send({
+    //         error: "SIMULATION_FAILED",
+    //         details: sim.value.err,
+    //         logs: sim.value.logs?.slice(-10) ?? [],
+    //       });
+    // }
 
-      req.log.info({ base64Len: base64.length }, "POST /buy-pass out");
+    //   req.log.info({ base64Len: base64.length }, "POST /buy-pass out");
 
       // ❸ Return per Actions spec
-      return reply.send({
-        transaction: base64, // base64 of VersionedTransaction
-        message: "VIP Pass created. Completing payment…",
-      });
+       return reply.send(res);
     } catch (e: any) {
       req.log.error({ e }, "POST /buy-pass failed");
       return withCORS(reply)
@@ -207,23 +226,24 @@ export async function actionsRoutes(app: FastifyInstance) {
     if (sig) {
       // 🔎 log so you can see if Dialect called back with the signature
       req.log.info({ sig }, "Dialect success callback");
-      return withCORS(reply).send({
-        icon: `${apiUrl}/icon.png`,
-        title: "LinkPass - VIP Pass",
-        label: "Paid ✔",
-        description: "Payment received. Your VIP Pass will arrive shortly.",
-        links: {
-          actions: [
-            {
-              label: "View on Explorer",
-              href: `https://explorer.solana.com/tx/${sig}${
-                cluster === "mainnet" ? "" : `?cluster=${cluster}`
-              }`,
-              type: "post",
-            },
-          ],
-        },
-      });
+      const success: ActionGetResponse = {
+      icon: `${apiUrl}/icon.png`,
+      title: "LinkPass - VIP Pass",
+      label: "Paid ✔",
+      description: "Payment received. Your VIP Pass will arrive shortly.",
+      links: {
+        actions: [
+          {
+            label: "View on Explorer",
+            href:
+              `https://explorer.solana.com/tx/${sig}` +
+              (cluster === "mainnet" ? "" : `?cluster=${cluster}`),
+            type: "post",
+          },
+        ],
+      },
+    };
+       return withActionHeaders(reply).send(success);
     }
     // ------- default metadata (no tx yet) -------
     const meta: ActionGetResponse = {
@@ -242,6 +262,6 @@ export async function actionsRoutes(app: FastifyInstance) {
         ],
       },
     };
-    return withCORS(reply).send(meta);
+    return withActionHeaders(reply).send(meta);
   });
 }
