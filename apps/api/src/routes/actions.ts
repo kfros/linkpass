@@ -1,9 +1,29 @@
-import { FastifyInstance } from "fastify";
-import { PublicKey } from "@solana/web3.js";
+import { FastifyInstance, FastifyReply, FastifySchema, FastifyTypeProviderDefault, RawServerDefault, RouteGenericInterface } from "fastify";
+import {   Connection,
+  PublicKey,
+  SystemProgram,
+  TransactionMessage,
+  VersionedTransaction,
+  ComputeBudgetProgram,
+  TransactionInstruction, } from "@solana/web3.js";
 import { getDb } from "../db/client";
 import { orders } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { getGateway } from "../chain";
+import { IncomingMessage, ServerResponse } from "http";
+
+const DEVNET_RPC = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
+const CLUSTER = (process.env.SOLANA_CLUSTER || "devnet").toLowerCase(); // "devnet" | "mainnet" | "testnet"
+const RECIPIENT = process.env.SOLANA_RECIPIENT_ADDRESS || ""; // devnet pubkey
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";      // e.g. https://linkpass-api.onrender.com
+const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+const LAMPORTS = 1_000_000_000;
+const PRICE_SOL = 0.5;
+const PRICE_LAMPORTS = Math.round(PRICE_SOL * LAMPORTS);
+
+function explorerTxUrl(sig: string) {
+  return `https://explorer.solana.com/tx/${sig}${CLUSTER === "mainnet" ? "" : `?cluster=${CLUSTER}`}`;
+}
 
 // Solana Actions spec types
 interface ActionGetResponse {
@@ -21,191 +41,231 @@ interface ActionGetResponse {
   };
 }
 
-interface ActionPostRequest {
-  account: string;
-}
 
-interface ActionPostResponse {
-  transaction: string;
-  message?: string;
+type ActionPostRequest = { account: string };
+type ActionPostResponse = { transaction: string; message?: string };
+
+function withCORS(reply: any) {
+  return reply
+    .header("Access-Control-Allow-Origin", "*")
+    .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+    .header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, X-Requested-With, x-dialect-sdk-version, x-dialect-app-id"
+    )
+    .header("Cache-Control", "no-store");
 }
 
 export async function actionsRoutes(app: FastifyInstance) {
   // GET /api/actions/buy-pass - Returns action metadata
-  app.get("/api/actions/buy-pass", async (req, reply) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+app.get("/api/actions/buy-pass", async (req, reply) => {
+    const sig = (req.query as any)?.transaction as string | undefined;
 
-    const response: ActionGetResponse = {
-      icon: `${apiUrl}/icon.png`,
-      label: "Buy VIP Pass",
-      description:
-        "Purchase a VIP pass with Solana. One-click payment via Blink!",
+    if (sig) {
+      const success: ActionGetResponse = {
+        icon: `${API_BASE}/icon.png`,
+        title: "LinkPass - VIP Pass",
+        label: "Paid ✔",
+        description: "Payment received. Your VIP Pass will arrive shortly.",
+        links: {
+          actions: [
+            {
+              label: "View on Explorer",
+              href: `https://explorer.solana.com/tx/${sig}${CLUSTER === "mainnet" ? "" : `?cluster=${CLUSTER}`}`,
+              type: "post",
+            },
+          ],
+        },
+      };
+      return withCORS(reply).send(success);
+    }
+
+    const meta: ActionGetResponse = {
+      icon: `${API_BASE}/icon.png`,
       title: "LinkPass - VIP Pass",
+      label: "Buy VIP Pass",
+      description: "Purchase a VIP pass with Solana. One-click payment via Blink!",
       links: {
         actions: [
           {
             label: "Buy for 0.5 SOL",
-            href: `${apiUrl}/api/actions/buy-pass`,
+            href: `${API_BASE}/api/actions/buy-pass`,
             type: "transaction",
           },
         ],
       },
     };
 
-    reply.header("Access-Control-Allow-Origin", "*");
-    reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    reply.header("Access-Control-Allow-Headers", "Content-Type");
-
-    return reply.send(response);
+    return withCORS(reply).send(meta);
   });
+
 
   // OPTIONS for CORS
-  app.options("/api/actions/buy-pass", async (req, reply) => {
-    reply.header("Access-Control-Allow-Origin", "*");
-    reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    reply.header("Access-Control-Allow-Headers", "Content-Type");
-    return reply.code(200).send();
+   app.options("/api/actions/buy-pass", async (_req, reply) => {
+    return withCORS(reply).code(200).send();
   });
-
+  
   // POST /api/actions/buy-pass - Returns serialized transaction
-  app.post("/api/actions/buy-pass", async (req, reply) => {
-  try {
-    // --- CORS & content type early ---
-    reply
-      .header("Access-Control-Allow-Origin", "*")
-      .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-      // include common Dialect/extension headers to avoid preflight rejections
-      .header("Access-Control-Allow-Headers",
-              "Content-Type, X-Requested-With, x-dialect-sdk-version, x-dialect-app-id")
-      .type("application/json");
+app.post("/api/actions/buy-pass", async (req, reply) => {
+    try {
+    withCORS(reply);
 
     const { account } = req.body as { account?: string };
     if (!account) return reply.code(400).send({ error: "Missing field 'account'" });
 
-    // Validate payer pubkey
-    new PublicKey(account);
+    const payer = new PublicKey(account);
+    const receiver = new PublicKey(RECIPIENT);
 
     const db = await getDb();
 
-    // Create order
+    // ❶ Create order first
     const [order] = await db.insert(orders).values({
       merchantId: 1,
       sku: "vip-pass",
-      amount: 0,
-      amountNano: BigInt("500000000"), // 0.5 SOL
+      amount: PRICE_SOL,
+      amountNano: BigInt(PRICE_LAMPORTS),
       chain: "sol",
       status: "paying",
-      toAddress: process.env.SOLANA_RECIPIENT_ADDRESS!,
-      memo: `Order-${Date.now()}`,
+      toAddress: receiver.toBase58(),
+      memo: "", // fill after id known
     }).returning();
 
-    const memo = `Order-${order.id}`;
-    await db.update(orders).set({ memo }).where(eq(orders.id, order.id));
+    const memoText = `order-${order.id}`;
 
-    // --- Build the unsigned VersionedTransaction ----
-    const gw = getGateway("SOL");
+    // Persist memo immediately
+    await db.update(orders).set({ memo: memoText }).where(eq(orders.id, order.id));
 
-    // Make sure your gateway uses:
-    // - ComputeUnitLimit + ComputeUnitPrice({ microLamports: 1000 })
-    // - getLatestBlockhash({ commitment: "finalized" })
-    // - serialize({ requireAllSignatures: false })  <-- important for unsigned tx
-    const intent = await gw.makePaymentIntent({
-      to: process.env.SOLANA_RECIPIENT_ADDRESS!,
-      amountNano: "500000000",
-      memo,
-      from: account,
+    // ❷ Build unsigned v0 tx with ComputeBudget + Transfer + Memo(order-<id>)
+    const connection = new Connection(DEVNET_RPC, "confirmed");
+    const computeIxs = [
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
+      ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1_000 }),
+    ];
+
+    const transferIx = SystemProgram.transfer({
+      fromPubkey: payer,
+      toPubkey: receiver,
+      lamports: PRICE_LAMPORTS,
     });
 
-    // prefer a direct field; otherwise take from debug
-    const base64Tx: string =
-      (intent as any).base64Transaction ??
-      (intent as any).debug?.base64Transaction;
+    const memoIx = new TransactionInstruction({
+      programId: MEMO_PROGRAM_ID,
+      keys: [],
+      data: Buffer.from(memoText, "utf8"),
+    });
 
-    if (!base64Tx) throw new Error("Failed to construct unsigned transaction");
+    const { blockhash } = await connection.getLatestBlockhash({ commitment: "finalized" });
 
-    // --- Return exactly what Dialect expects ---
-    // Keep it to { transaction, message [, links] }. No extra fields.
-    return reply.code(200).send({
-      transaction: base64Tx,
+    const msg = new TransactionMessage({
+      payerKey: payer,
+      recentBlockhash: blockhash,
+      instructions: [...computeIxs, transferIx, memoIx],
+    }).compileToV0Message();
+
+    const tx = new VersionedTransaction(msg);
+    const base64 = Buffer.from(
+      tx.serialize()
+    ).toString("base64");
+
+    // ❸ Return per Actions spec
+    return reply.type("application/json").send({
+      transaction: base64,
       message: "VIP Pass created. Completing payment…",
-      // Optional: success links; {SIGNATURE} will be replaced by Dialect
-      links: {
-        actions: [
-          {
-            label: "View on Explorer",
-            href: "https://explorer.solana.com/tx/{SIGNATURE}?cluster=devnet",
-            type: "external",
-          },
-        ],
-      },
     });
 
-  } catch (error) {
-    req.log.error({ error }, "Error creating Blink transaction");
+  } catch (e: any) {
+    req.log.error({ err: e }, "Failed to create Blink transaction");
     return reply
-      .header("Access-Control-Allow-Origin", "*")
-      .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-      .header("Access-Control-Allow-Headers",
-              "Content-Type, X-Requested-With, x-dialect-sdk-version, x-dialect-app-id")
       .type("application/json")
       .code(500)
-      .send({ error: "Failed to create transaction", details: (error as Error).message });
+      .send({ error: "Failed to create transaction", details: e?.message || String(e) });
   }
 });
 
   // GET /api/actions/buy-pass/:orderId/status - Check order status
-  app.get("/api/actions/buy-pass/:orderId/status", async (req, reply) => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-     const sig = (req.query as any).transaction as string | undefined;
+  app.get("/api/actions/buy-pass", async (req, reply) => {
+  const sig = (req.query as any)?.transaction as string | undefined;
 
-      if (sig) {
-    return reply.send({
-      icon: `${apiUrl}/icon.png`,
-      title: "LinkPass - VIP Pass",
-      description: "Payment received. Your VIP Pass will arrive shortly.",
-      label: "Paid ✔",
-      links: {
-        actions: [
-          { label: "View on Explorer", href: `https://explorer.solana.com/tx/${sig}?cluster=devnet`, type: "external" },
-        ],
-      },
-    });
-  }
+  // If Dialect is calling back with ?transaction=<signature>, confirm on-chain and close the order
+  if (sig) {
     try {
-      const { orderId } = req.params as { orderId: string };
+      const connection = new Connection(DEVNET_RPC, "confirmed");
+      const tx = await connection.getTransaction(sig, {
+        commitment: "confirmed",
+        maxSupportedTransactionVersion: 0,
+      });
+
+      // Defensive checks
+      if (!tx?.meta || tx.meta.err) throw new Error("Transaction failed or not found");
+
+      // Extract memo string (if present)
+      const keys = tx.transaction.message.getAccountKeys().staticAccountKeys;
+      const memoIx = tx.transaction.message.compiledInstructions.find(ix =>
+        keys[ix.programIdIndex].toBase58() === MEMO_PROGRAM_ID.toBase58()
+      );
+      let memoText: string | undefined;
+      if (memoIx) memoText = Buffer.from(memoIx.data).toString("utf8");
+
+      // Parse order id from memo
+      const orderId = memoText?.startsWith("order-") ? Number(memoText.slice("order-".length)) : undefined;
+      if (!orderId) throw new Error("Memo with order-<id> not found");
+
+      // Check amount received by RECIPIENT
+      const idx = keys.findIndex(k => k.toBase58() === RECIPIENT);
+      if (idx < 0) throw new Error("Recipient not in account keys");
+
+      const received =
+        (tx.meta.postBalances[idx] ?? 0) - (tx.meta.preBalances[idx] ?? 0);
+      if (received !== PRICE_LAMPORTS) throw new Error("Amount mismatch");
+
+      // ✅ Mark order as paid
       const db = await getDb();
+      await db.update(orders).set({
+        status: "paid",
+        tx: sig,
+        confirmedAt: new Date(),
+      }).where(eq(orders.id, orderId));
 
-      const order = await db.query.orders.findFirst({
-        where: (t, { eq }) => eq(t.id, Number(orderId)),
-      });
+      // Success card
+      const success: ActionGetResponse = {
+        icon: `${API_BASE}/icon.png`,
+        title: "LinkPass - VIP Pass",
+        label: "Paid ✔",
+        description: `Order #${orderId} paid successfully.`,
+        links: {
+          actions: [
+            { label: "View on Explorer", href: explorerTxUrl(sig), type: "post" },
+          ],
+        },
+      };
+      return withCORS(reply).send(success);
 
-      if (!order) {
-        return reply.code(404).send({
-          error: "Order not found",
-        });
-      }
-
-      reply.header("Access-Control-Allow-Origin", "*");
-      reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-      reply.header("Access-Control-Allow-Headers", "Content-Type");
-
-      return reply.send({
-        orderId: order.id,
-        status: order.status,
-        tx: order.tx,
-        receiptUrl: order.receiptUrl,
-        createdAt: order.createdAt,
-        confirmedAt: order.confirmedAt,
-      });
-    } catch (error) {
-      req.log.info({ error }, "Error checking order status");
-
-      reply.header("Access-Control-Allow-Origin", "*");
-
-      return reply.code(500).send({
-        error: "Failed to check order status",
-        details: (error as Error).message,
-      });
+    } catch (e: any) {
+      // If verification fails, show a neutral result (and keep order as 'paying')
+      const fallback: ActionGetResponse = {
+        icon: `${API_BASE}/icon.png`,
+        title: "LinkPass - VIP Pass",
+        label: "Payment received",
+        description: "We are finalizing your payment. If this persists, contact support.",
+        links: { actions: [{ label: "View on Explorer", href: explorerTxUrl(sig!), type: "post" }] },
+      };
+      return withCORS(reply).send(fallback);
     }
-  });
+  }
+
+  // ------- default metadata (no tx yet) -------
+  const meta: ActionGetResponse = {
+    icon: `${API_BASE}/icon.png`,
+    title: "LinkPass - VIP Pass",
+    label: `Buy for ${PRICE_SOL} SOL`,
+    description: "Purchase a VIP pass with Solana. One-click payment via Blink!",
+    links: {
+      actions: [
+        { label: `Buy for ${PRICE_SOL} SOL`, href: `${API_BASE}/api/actions/buy-pass`, type: "transaction" },
+      ],
+    },
+  };
+  return withCORS(reply).send(meta);
+});
 }
+
