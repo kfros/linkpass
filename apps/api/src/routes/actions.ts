@@ -68,104 +68,61 @@ export async function actionsRoutes(app: FastifyInstance) {
   });
 
   // POST /api/actions/buy-pass - Returns serialized transaction
-  app.post("/api/actions/buy-pass", async (req, reply) => {
-    try {
-      const { account, type } = req.body as ActionPostRequest & { type?: string };
+app.post("/api/actions/buy-pass", async (req, reply) => {
+  try {
+    const { account } = req.body as ActionPostRequest;
 
-      if (!account) {
-        return reply.code(400).send({
-          error: "Missing required field: account (sender public key)",
-        });
-      }
+    if (!account) return reply.code(400).send({ error: "Missing required field: account" });
+    try { new PublicKey(account); } catch { return reply.code(400).send({ error: "Invalid Solana account address" }); }
 
-      // Validate the account is a valid Solana public key
-      try {
-        new PublicKey(account);
-      } catch {
-        return reply.code(400).send({
-          error: "Invalid Solana account address",
-        });
-      }
+    const db = await getDb();
 
-      const db = await getDb();
+    // Create the order first
+    const [order] = await db.insert(orders).values({
+      merchantId: 1,
+      sku: "vip-pass",
+      amount: 0,
+      amountNano: BigInt("500000000"), // 0.5 SOL
+      chain: "sol",
+      status: "paying",
+      toAddress: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
+      memo: `Order-${Date.now()}`,
+    }).returning();
 
-      // Create order in database
-      const [order] = await db
-        .insert(orders)
-        .values({
-          merchantId: 1,
-          sku: "vip-pass",
-          amount: 0,
-          amountNano: BigInt("10000000"), // 0.01 SOL in lamports
-          chain: "sol",
-          status: "paying",
-          toAddress: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
-          memo: `Order-${Date.now()}`,
-        })
-        .returning();
+    // Finalize the memo
+    const memo = `Order-${order.id}`;
+    await db.update(orders).set({ memo }).where(eq(orders.id, order.id));
 
-      // Update order with the correct memo
-      await db
-        .update(orders)
-        .set({ 
-          memo: `Order-${order.id}`,
-        })
-        .where(eq(orders.id, order.id));
+    // Build the UNSIGNED tx and return it directly
+    const gw = getGateway("SOL");
+    const { base64Transaction } = await gw.makePaymentIntent({
+      to: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
+      amountNano: "500000000", // 0.5 SOL
+      memo,
+      from: account,
+    }).then(x => ({ base64Transaction: (x as any).debug?.base64Transaction || (x as any).base64Transaction }));
 
-      // If type is 'transaction', generate serialized transaction for Dial.to/Blink
-      if (type === "transaction") {
-        const gw = getGateway("SOL");
-        const intent = await gw.makePaymentIntent({
-          to: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
-          amountNano: "500000000", // 0.5 SOL in lamports (adjust as needed)
-          memo: `Order-${order.id}`,
-          from: account,
-        });
-        // Extract transaction from the intent URI
-        const url = new URL(intent.uri);
-        const serializedTransaction = url.searchParams.get("tx");
-        if (!serializedTransaction) {
-          throw new Error("Failed to generate transaction");
-        }
-        reply.header("Access-Control-Allow-Origin", "*");
-        reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-        reply.header("Access-Control-Allow-Headers", "Content-Type");
-        return reply.send({
-          orderId: order.id,
-          transaction: serializedTransaction,
-          message: `VIP Pass purchase created! Order ID: ${order.id}`,
-        });
-      }
+    if (!base64Transaction) throw new Error("Failed to construct transaction");
 
-      // Otherwise, generate Solana Pay URL for QR code
-      const recipient = process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111";
-      const amount = 0.01;
-      const reference = order.id;
-      const label = "VIP Pass";
-      const message = "Buy VIP Pass";
-      const solanaPayUrl = `solana:${recipient}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}`;
+    reply.header("Access-Control-Allow-Origin", "*");
+    reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    reply.header("Access-Control-Allow-Headers", "Content-Type");
 
-      reply.header("Access-Control-Allow-Origin", "*");
-      reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-      reply.header("Access-Control-Allow-Headers", "Content-Type");
-      return reply.send({
-        orderId: order.id,
-        link: solanaPayUrl,
-        message: `VIP Pass purchase created! Order ID: ${order.id}`,
-      });
-    } catch (error) {
-      req.log.info({ error }, "Error creating Blink transaction");
-      
-      reply.header("Access-Control-Allow-Origin", "*");
-      reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-      reply.header("Access-Control-Allow-Headers", "Content-Type");
-      
-      return reply.code(500).send({
-        error: "Failed to create transaction",
-        details: (error as Error).message,
-      });
-    }
-  });
+    const response: ActionPostResponse & { orderId: number } = {
+      transaction: base64Transaction,
+      message: `VIP Pass purchase created! Order ID: ${order.id}`,
+      orderId: order.id,
+    };
+    return reply.send(response);
+
+  } catch (error) {
+    req.log.info({ error }, "Error creating Blink transaction");
+    reply.header("Access-Control-Allow-Origin", "*");
+    reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    reply.header("Access-Control-Allow-Headers", "Content-Type");
+    return reply.code(500).send({ error: "Failed to create transaction", details: (error as Error).message });
+  }
+});
 
   // GET /api/actions/buy-pass/:orderId/status - Check order status
   app.get("/api/actions/buy-pass/:orderId/status", async (req, reply) => {
