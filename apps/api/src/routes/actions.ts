@@ -70,7 +70,7 @@ export async function actionsRoutes(app: FastifyInstance) {
   // POST /api/actions/buy-pass - Returns serialized transaction
   app.post("/api/actions/buy-pass", async (req, reply) => {
     try {
-      const { account } = req.body as ActionPostRequest;
+      const { account, type } = req.body as ActionPostRequest & { type?: string };
 
       if (!account) {
         return reply.code(400).send({
@@ -96,21 +96,13 @@ export async function actionsRoutes(app: FastifyInstance) {
           merchantId: 1,
           sku: "vip-pass",
           amount: 0,
-          amountNano: BigInt("50000000"), // 0.5 SOL in lamports
+          amountNano: BigInt("10000000"), // 0.01 SOL in lamports
           chain: "sol",
           status: "paying",
           toAddress: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
           memo: `Order-${Date.now()}`,
         })
         .returning();
-
-      // Generate Solana Pay URL for QR code
-      const recipient = process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111";
-      const amount = 0.5;
-      const reference = order.id;
-      const label = "VIP Pass";
-      const message = "Buy VIP Pass";
-      const solanaPayUrl = `solana:${recipient}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}`;
 
       // Update order with the correct memo
       await db
@@ -120,17 +112,47 @@ export async function actionsRoutes(app: FastifyInstance) {
         })
         .where(eq(orders.id, order.id));
 
-      const response = {
-        orderId: order.id,
-        link: solanaPayUrl,
-        message: `VIP Pass purchase created! Order ID: ${order.id}`,
-      };
+      // If type is 'transaction', generate serialized transaction for Dial.to/Blink
+      if (type === "transaction") {
+        const gw = getGateway("SOL");
+        const intent = await gw.makePaymentIntent({
+          to: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
+          amountNano: "500000000", // 0.5 SOL in lamports (adjust as needed)
+          memo: `Order-${order.id}`,
+          from: account,
+        });
+        // Extract transaction from the intent URI
+        const url = new URL(intent.uri);
+        const serializedTransaction = url.searchParams.get("tx");
+        if (!serializedTransaction) {
+          throw new Error("Failed to generate transaction");
+        }
+        reply.header("Access-Control-Allow-Origin", "*");
+        reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+        reply.header("Access-Control-Allow-Headers", "Content-Type");
+        return reply.send({
+          orderId: order.id,
+          transaction: serializedTransaction,
+          message: `VIP Pass purchase created! Order ID: ${order.id}`,
+        });
+      }
+
+      // Otherwise, generate Solana Pay URL for QR code
+      const recipient = process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111";
+      const amount = 0.01;
+      const reference = order.id;
+      const label = "VIP Pass";
+      const message = "Buy VIP Pass";
+      const solanaPayUrl = `solana:${recipient}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}`;
 
       reply.header("Access-Control-Allow-Origin", "*");
       reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
       reply.header("Access-Control-Allow-Headers", "Content-Type");
-
-      return reply.send(response);
+      return reply.send({
+        orderId: order.id,
+        link: solanaPayUrl,
+        message: `VIP Pass purchase created! Order ID: ${order.id}`,
+      });
     } catch (error) {
       req.log.info({ error }, "Error creating Blink transaction");
       
