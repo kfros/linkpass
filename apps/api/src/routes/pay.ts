@@ -1,10 +1,10 @@
 import { FastifyInstance } from "fastify";
 import { getDb } from "../db/client";
 import { orders } from "../db/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, InferInsertModel } from "drizzle-orm";
 import { z } from "zod";
 import { getGateway } from "../chain";
-import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import type { Chain } from "../chain/types";
 
 const PayBody = z.object({
@@ -15,17 +15,29 @@ const PayBody = z.object({
   chain: z.enum(["TON", "SOL"]).optional(),
 });
 
+type NewOrder = InferInsertModel<typeof orders>;
+
 export async function payRoutes(app: FastifyInstance) {
   // Helper function to get pricing and recipient address for a SKU and chain
   function getSkuConfig(sku: string, chain: Chain) {
     // For MVP, hardcoded pricing - later move to database
     const configs = {
       "vip-pass": {
-        TON: { amountNano: "20000000", recipient: process.env.TON_RECIPIENT_ADDRESS || "0QBv2t8tqBB2KADpupdZ5nGT-CQm89eHHQZboclO1ealFTZL" },
-        SOL: { amountNano: "10000000", recipient: process.env.SOLANA_RECIPIENT_ADDRESS || "6joUci1Bv3i2ymnxSyvL7HU6QBEEDrUHS8TMpqNTx2mG" }, // 0.01 SOL in lamports
+        TON: {
+          amountNano: "20000000",
+          recipient:
+            process.env.TON_RECIPIENT_ADDRESS ||
+            "0QBv2t8tqBB2KADpupdZ5nGT-CQm89eHHQZboclO1ealFTZL",
+        },
+        SOL: {
+          amountNano: "10000000",
+          recipient:
+            process.env.SOLANA_RECIPIENT_ADDRESS ||
+            "6joUci1Bv3i2ymnxSyvL7HU6QBEEDrUHS8TMpqNTx2mG",
+        }, // 0.01 SOL in lamports
       },
     };
-    
+
     const config = configs[sku as keyof typeof configs]?.[chain];
     if (!config) throw new Error(`Unsupported sku/chain: ${sku}/${chain}`);
     return config;
@@ -45,31 +57,29 @@ export async function payRoutes(app: FastifyInstance) {
       chain = "TON",
     } = parsedBody.data;
     // Accept 'account' and 'type' from req.body for compatibility
-  const body: any = req.body;
-  const account = body.account;
-  const type = body.type;
+    const body: any = req.body;
+    const account = body.account;
+    const type = body.type;
+
+    const skuConfig = getSkuConfig(sku, chain);
+    const newOrder: NewOrder = {
+      merchantId: 1,
+      sku: "vip-pass",
+      amount: skuConfig.amountNano, // string
+      chain: "sol",
+      from: account, // string | null
+      status: "paying", // must be in your orderStatusEnum
+      amountNano: BigInt(skuConfig.amountNano), // bigint | null
+      toAddress: skuConfig.recipient, // string | null
+      // memo: will set after we know id (optional/nullable)
+    };
 
     try {
       const db = await getDb();
-      const skuConfig = getSkuConfig(sku, chain);
       const gw = getGateway(chain);
 
       // Create order
-      const [order] = await db
-        .insert(orders)
-        .values({
-          merchantId,
-          sku,
-          amount: 0, // Legacy field, using amountNano instead
-          amountNano: BigInt(skuConfig.amountNano),
-          chain: chain.toLowerCase(),
-          status: "paying",
-          tgUserId,
-          tgUsername,
-          toAddress: skuConfig.recipient,
-          memo: `Order-${Date.now()}`, // Unique identifier for this order
-        })
-        .returning();
+      const [order] = await db.insert(orders).values(newOrder).returning();
 
       let link: string;
       let qrText: string;
@@ -111,7 +121,9 @@ export async function payRoutes(app: FastifyInstance) {
           const reference = order.id;
           const label = "VIP Pass";
           const message = "Buy VIP Pass";
-          link = `solana:${publicKey}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}`;
+          link = `solana:${publicKey}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(
+            label
+          )}&message=${encodeURIComponent(message)}`;
           qrText = link;
         }
       } else {
@@ -194,7 +206,9 @@ export async function payRoutes(app: FastifyInstance) {
       const gw = getGateway(chain);
 
       if (!order.toAddress) {
-        return reply.code(400).send({ ok: false, reason: "toAddress not found" });
+        return reply
+          .code(400)
+          .send({ ok: false, reason: "toAddress not found" });
       }
 
       const hit = await gw.findIncoming({
@@ -202,7 +216,7 @@ export async function payRoutes(app: FastifyInstance) {
         amountNano: String(order.amountNano ?? order.amount),
         memo: order.memo ?? undefined,
       });
-      
+
       if (!hit) {
         req.log.info(
           { expect: { amountNano: order.amountNano, memo: order.memo } },
@@ -227,7 +241,13 @@ export async function payRoutes(app: FastifyInstance) {
       return reply.send({ ok: true, tx: hit.txHash, receiptUrl });
     } catch (e) {
       req.log.info({ err: e }, "confirm: error");
-      return reply.code(500).send({ ok: false, reason: "domain error", error: (e as Error).message });
+      return reply
+        .code(500)
+        .send({
+          ok: false,
+          reason: "domain error",
+          error: (e as Error).message,
+        });
     }
   });
 }

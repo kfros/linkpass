@@ -3,11 +3,12 @@ import cors from "@fastify/cors";
 // import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { getDb } from "./db/client";
-import { eq, or, sql } from "drizzle-orm";
+import { eq, InferInsertModel, or, sql } from "drizzle-orm";
 import {
   merchants as tMerchants,
   passes as tPasses,
   orders as tOrders,
+  orders,
 } from "./db/schema";
 
 import { verifyTelegramInitData } from "./telegram/verify";
@@ -15,6 +16,8 @@ import * as crypto from "crypto";
 
 import { payRoutes } from "./routes/pay";
 import { actionsRoutes } from "./routes/actions";
+
+type NewOrder = InferInsertModel<typeof orders>;
 
 const CreateMerchant = z.object({
   name: z.string().min(2),
@@ -27,7 +30,7 @@ const CreatePass = z.object({
     .regex(/^[a-zA-Z0-9-]+$/i, "SKU must be alphanumeric with optional dashes"),
   title: z.string().min(2),
   priceNano: z.coerce.number().int().positive().optional(), // in nanotons
-  chain: z.enum(["TON", "SOL"]).optional(),               // default TON
+  chain: z.enum(["TON", "SOL"]).optional(), // default TON
 });
 const CreateOrder = z.object({
   merchantId: z.coerce.number().int().positive(),
@@ -37,31 +40,36 @@ const CreateOrder = z.object({
 const UpdateOrderTx = z.object({
   tx: z.string().min(1),
   chain: z.enum(["sol", "ton"]),
-  receiptUrl: z.string().optional()
+  receiptUrl: z.string().optional(),
 });
 
 export async function buildServer() {
   const app = fastify({ logger: true });
   await app.register(cors, {
-  origin: (origin, cb) => {
-    // Allow requests with no origin (like curl/Postman)
-    if (!origin) return cb(null, true);
-    const allowed = [
-      "https://linkpass-web.onrender.com",
-      "https://linkpass-api.onrender.com",
-      "https://localhost:4000",
-      "http://localhost:3000"
-    ];
-    cb(null, allowed.includes(origin));
-  },
-  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Accept", "Authorization", "ngrok-skip-browser-warning"],
-  exposedHeaders: ["Content-Type"],
-  maxAge: 86400,
-  preflight: true,
-  strictPreflight: false,
-  credentials: false,
-});
+    origin: (origin, cb) => {
+      // Allow requests with no origin (like curl/Postman)
+      if (!origin) return cb(null, true);
+      const allowed = [
+        "https://linkpass-web.onrender.com",
+        "https://linkpass-api.onrender.com",
+        "https://localhost:4000",
+        "http://localhost:3000",
+      ];
+      cb(null, allowed.includes(origin));
+    },
+    methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Content-Type",
+      "Accept",
+      "Authorization",
+      "ngrok-skip-browser-warning",
+    ],
+    exposedHeaders: ["Content-Type"],
+    maxAge: 86400,
+    preflight: true,
+    strictPreflight: false,
+    credentials: false,
+  });
 
   await app.register(payRoutes);
   await app.register(actionsRoutes);
@@ -116,9 +124,9 @@ export async function buildServer() {
 
     const [row] = await db
       .insert(tPasses)
-      .values({ 
-        merchantId: Number(merchantId), 
-        sku, 
+      .values({
+        merchantId: Number(merchantId),
+        sku,
         title,
         priceNano: priceNano ? BigInt(priceNano) : null,
         chain: chain || null,
@@ -153,7 +161,7 @@ export async function buildServer() {
     const parsed = CreateOrder.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send(parsed.error.message);
 
-    const { merchantId, sku, amount, } = parsed.data;
+    const { merchantId, sku, amount } = parsed.data;
     const db = await getDb();
     const merchant = await db.query.merchants.findFirst({
       where: eq(tMerchants.id, Number(merchantId)),
@@ -169,22 +177,30 @@ export async function buildServer() {
       return reply.status(400).send({ error: "Invalid SKU" });
     }
 
-    const [row] = await db
-      .insert(tOrders)
-      .values({ merchantId: Number(merchantId), sku, amount, chain: "mock" })
-      .returning({
-        id: tOrders.id,
-        merchantId: tOrders.merchantId,
-        sku: tOrders.sku,
-        amount: tOrders.amount,
-        chain: tOrders.chain,
-        tx: tOrders.tx,
-        amountNano: tOrders.amountNano,
-        memo: tOrders.memo,
-        confirmedAt: tOrders.confirmedAt,
-        toAddress: tOrders.toAddress,
-        createdAt: tOrders.createdAt,
-      });
+    const newOrder: NewOrder = {
+      merchantId: 1,
+      sku: sku,
+      amount: amount.toString(), // string
+      chain: "mock",
+      from: null, // string | null
+      status: "paying", // must be in your orderStatusEnum
+      toAddress: null, // string | null
+      // memo: will set after we know id (optional/nullable)
+    };
+
+    const [row] = await db.insert(tOrders).values(newOrder).returning({
+      id: tOrders.id,
+      merchantId: tOrders.merchantId,
+      sku: tOrders.sku,
+      amount: tOrders.amount,
+      chain: tOrders.chain,
+      tx: tOrders.tx,
+      amountNano: tOrders.amountNano,
+      memo: tOrders.memo,
+      confirmedAt: tOrders.confirmedAt,
+      toAddress: tOrders.toAddress,
+      createdAt: tOrders.createdAt,
+    });
     return reply.status(201).send(row);
   });
 
@@ -198,11 +214,13 @@ export async function buildServer() {
     const [row] = await db
       .update(tOrders)
       .set({
-      tx: parsed.data.tx,
-      chain: parsed.data.chain,
-      status: "paid",
-      ...(parsed.data.receiptUrl ? { receiptUrl: parsed.data.receiptUrl } : {}),
-    })
+        tx: parsed.data.tx,
+        chain: parsed.data.chain,
+        status: "paid",
+        ...(parsed.data.receiptUrl
+          ? { receiptUrl: parsed.data.receiptUrl }
+          : {}),
+      })
       .where(eq(tOrders.id, orderId))
       .returning({
         id: tOrders.id,

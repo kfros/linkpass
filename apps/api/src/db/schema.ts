@@ -14,6 +14,7 @@ pgTable,
   jsonb,
   bigserial,
   customType,
+  numeric
 } from "drizzle-orm/pg-core";
 import { fr } from "zod/v4/locales/index.cjs";
 
@@ -70,7 +71,7 @@ export const orders = pgTable(
       .notNull()
       .references(() => merchants.id),
     sku: varchar("sku", { length: 64 }).notNull(),
-    amount: integer("amount").notNull(),
+    amount: numeric("amount", { precision: 20, scale: 9 }).notNull(),
     chain: varchar("chain", { length: 32 }).notNull(),
     from: varchar("from_address", { length: 128 }),
     tgUserId: text("tg_user_id"),
