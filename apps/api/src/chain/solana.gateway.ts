@@ -34,7 +34,7 @@ export class SolanaGateway implements ChainGateway {
     assert(/^[\d]+$/.test(String(amountNano)), "Solana: amountNano must be an integer string");
 
     const connection = this.getConnection();
-    const recipient = new PublicKey(to);
+    const recipient = this.getRecipientAddress();
     const lamports = BigInt(amountNano);
 
     // Use the sender's wallet public key from 'from' ONLY; throw if not provided
@@ -44,7 +44,7 @@ export class SolanaGateway implements ChainGateway {
     const userPubkey = new PublicKey(from);
 
     // Check if recipient address is valid and not the default
-    if (recipient.toBase58() === "11111111111111111111111111111111") {
+    if (new PublicKey(recipient).toBase58() === "11111111111111111111111111111111") {
       throw new Error("Recipient address is not set. Please configure SOLANA_RECIPIENT_ADDRESS for devnet.");
     }
 
@@ -54,7 +54,7 @@ export class SolanaGateway implements ChainGateway {
     transaction.add(
       SystemProgram.transfer({
         fromPubkey: userPubkey,
-        toPubkey: recipient,
+        toPubkey: new PublicKey(recipient),
         lamports: Number(lamports),
       })
     );

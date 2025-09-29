@@ -33,13 +33,21 @@ export async function payRoutes(app: FastifyInstance) {
 
   // 1) Create order and return payment link/intent
   app.post("/pay", async (req, reply) => {
+    const parsedBody = PayBody.safeParse(req.body);
+    if (!parsedBody.success) {
+      return reply.status(400).send({ error: "Invalid request body" });
+    }
     const {
       sku = "vip-pass",
       merchantId = 1,
       tgUserId,
       tgUsername,
       chain = "TON",
-    } = PayBody.parse(req.body);
+    } = parsedBody.data;
+    // Accept 'account' and 'type' from req.body for compatibility
+  const body: any = req.body;
+  const account = body.account;
+  const type = body.type;
 
     try {
       const db = await getDb();
@@ -67,15 +75,36 @@ export async function payRoutes(app: FastifyInstance) {
       let qrText: string;
 
       if (chain === "SOL") {
-        // Generate Solana Pay URL for QR code
-        const recipient = skuConfig.recipient;
-        const publicKey = new PublicKey(recipient);
-        const amount = Number(skuConfig.amountNano) / 1e9; // convert lamports to SOL
-        const reference = order.id;
-        const label = "VIP Pass";
-        const message = "Buy VIP Pass";
-        link = `solana:${publicKey}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}`;
-        qrText = link;
+        // If type is 'transaction', generate serialized transaction for one-click payments
+        if (type === "transaction" && account) {
+          const intent = await gw.makePaymentIntent({
+            to: skuConfig.recipient,
+            amountNano: skuConfig.amountNano,
+            memo: `Order-${order.id}`,
+            from: account,
+          });
+          // Extract transaction from the intent URI
+          const url = new URL(intent.uri);
+          const serializedTransaction = url.searchParams.get("tx");
+          if (!serializedTransaction) {
+            throw new Error("Failed to generate transaction");
+          }
+          return reply.send({
+            orderId: order.id,
+            transaction: serializedTransaction,
+            message: `VIP Pass purchase created! Order ID: ${order.id}`,
+          });
+        } else {
+          // Generate Solana Pay URL for QR code
+          const recipient = skuConfig.recipient;
+          const publicKey = new PublicKey(recipient);
+          const amount = Number(skuConfig.amountNano) / 1e9; // convert lamports to SOL
+          const reference = order.id;
+          const label = "VIP Pass";
+          const message = "Buy VIP Pass";
+          link = `solana:${publicKey}?amount=${amount}&reference=${reference}&label=${encodeURIComponent(label)}&message=${encodeURIComponent(message)}`;
+          qrText = link;
+        }
       } else {
         // Generate payment intent for TON or other chains
         const intent = await gw.makePaymentIntent({
