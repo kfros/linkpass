@@ -135,7 +135,12 @@ export async function actionsRoutes(app: FastifyInstance) {
         message: `VIP Pass purchase created! Order ID: ${order.id}`,
         orderId: order.id,
       };
-      return reply.type("application/json").send({
+      return reply
+  .header("Access-Control-Allow-Origin", "*")
+  .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+  .header("Access-Control-Allow-Headers", "Content-Type")
+  .type("application/json")
+  .send({
     transaction: base64Transaction,
     message: "VIP Pass created. Completing payment…",
     // optional: links shown after success
