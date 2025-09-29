@@ -48,12 +48,17 @@ function explorerTxUrl(sig: string) {
   }`;
 }
 
+const CAIP_SOLANA_MAINNET = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
+const CAIP_SOLANA_DEVNET  = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+const ACTION_VERSION = "2.4"; // keep in sync with your lib
+
 function withActionHeaders(reply: any) {
+const caip = CLUSTER === "mainnet" ? CAIP_SOLANA_MAINNET : CAIP_SOLANA_DEVNET;
   return reply
     .headers({
       ...ACTIONS_CORS_HEADERS,       // CORS + cache headers Dialect expects
-      "x-blockchain-ids": BLOCKCHAIN_IDS, // CAIP-2 chain id
-      "x-action-version": "2.4",      // current Actions version used in docs
+      "x-blockchain-ids": caip, // CAIP-2 chain id
+      "x-action-version": ACTION_VERSION,      // current Actions version used in docs
     })
     .type("application/json");
 }
