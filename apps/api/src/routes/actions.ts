@@ -84,6 +84,8 @@ export async function actionsRoutes(app: FastifyInstance) {
     try {
       withCORS(reply);
 
+      req.log.info({ body: req.body }, "POST /buy-pass in");
+
       const { account } = req.body as { account?: string };
       if (!account)
         return reply.code(400).send({ error: "Missing field 'account'" });
@@ -148,113 +150,45 @@ export async function actionsRoutes(app: FastifyInstance) {
       const tx = new VersionedTransaction(msg);
       const base64 = Buffer.from(tx.serialize()).toString("base64");
 
+      req.log.info({ base64Len: base64.length }, "POST /buy-pass out");
+
       // ❸ Return per Actions spec
-      return reply.type("application/json").send({
-        transaction: base64,
-        message: "VIP Pass created. Completing payment…",
+      return reply.send({
+      transaction: base64,        // base64 of VersionedTransaction
+      message: "VIP Pass created. Completing payment…",
       });
-    } catch (e: any) {
-      req.log.error({ err: e }, "Failed to create Blink transaction");
-      return reply
-        .type("application/json")
-        .code(500)
-        .send({
-          error: "Failed to create transaction",
-          details: e?.message || String(e),
-        });
-    }
-  });
+    }  catch (e: any) {
+    req.log.error({ e }, "POST /buy-pass failed");
+    return withCORS(reply).code(500).send({ error: "Failed to create transaction", details: e?.message });
+  }
+});
 
   // GET /api/actions/buy-pass/:orderId/status - Check order status
   app.get("/api/actions/buy-pass", async (req, reply) => {
-    const sig = (req.query as any)?.transaction as string | undefined;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+  const cluster = (process.env.SOLANA_CLUSTER ?? "devnet").toLowerCase();
+  const sig = (req.query as any)?.transaction as string | undefined;
+  req.log.info({ url: req.url, q: req.query }, "GET /buy-pass");
 
-    // If Dialect is calling back with ?transaction=<signature>, confirm on-chain and close the order
-    if (sig) {
-      try {
-        const connection = new Connection(DEVNET_RPC, "confirmed");
-        const tx = await connection.getTransaction(sig, {
-          commitment: "confirmed",
-          maxSupportedTransactionVersion: 0,
-        });
-
-        // Defensive checks
-        if (!tx?.meta || tx.meta.err)
-          throw new Error("Transaction failed or not found");
-
-        // Extract memo string (if present)
-        const keys = tx.transaction.message.getAccountKeys().staticAccountKeys;
-        const memoIx = tx.transaction.message.compiledInstructions.find(
-          (ix) =>
-            keys[ix.programIdIndex].toBase58() === MEMO_PROGRAM_ID.toBase58()
-        );
-        let memoText: string | undefined;
-        if (memoIx) memoText = new TextDecoder("utf-8").decode(memoIx.data);
-
-        // Parse order id from memo
-        const orderId = memoText?.startsWith("order-")
-          ? Number(memoText.slice("order-".length))
-          : undefined;
-        if (!orderId) throw new Error("Memo with order-<id> not found");
-
-        // Check amount received by RECIPIENT
-        const idx = keys.findIndex((k) => k.toBase58() === RECIPIENT);
-        if (idx < 0) throw new Error("Recipient not in account keys");
-
-        const received =
-          (tx.meta.postBalances[idx] ?? 0) - (tx.meta.preBalances[idx] ?? 0);
-        if (received !== PRICE_LAMPORTS) throw new Error("Amount mismatch");
-
-        // ✅ Mark order as paid
-        const db = await getDb();
-        await db
-          .update(orders)
-          .set({
-            status: "paid",
-            tx: sig,
-            confirmedAt: new Date(),
-          })
-          .where(eq(orders.id, orderId));
-
-        // Success card
-        const success: ActionGetResponse = {
-          icon: `${API_BASE}/icon.png`,
-          title: "LinkPass - VIP Pass",
-          label: "Paid ✔",
-          description: `Order #${orderId} paid successfully.`,
-          links: {
-            actions: [
-              {
-                label: "View on Explorer",
-                href: explorerTxUrl(sig),
-                type: "post",
-              },
-            ],
+  if (sig) {
+    // 🔎 log so you can see if Dialect called back with the signature
+    req.log.info({ sig }, "Dialect success callback");
+    return withCORS(reply).send({
+      icon: `${apiUrl}/icon.png`,
+      title: "LinkPass - VIP Pass",
+      label: "Paid ✔",
+      description: "Payment received. Your VIP Pass will arrive shortly.",
+      links: {
+        actions: [
+          {
+            label: "View on Explorer",
+            href: `https://explorer.solana.com/tx/${sig}${cluster === "mainnet" ? "" : `?cluster=${cluster}`}`,
+            type: "post",
           },
-        };
-        return withCORS(reply).send(success);
-      } catch (e: any) {
-        // If verification fails, show a neutral result (and keep order as 'paying')
-        const fallback: ActionGetResponse = {
-          icon: `${API_BASE}/icon.png`,
-          title: "LinkPass - VIP Pass",
-          label: "Payment received",
-          description:
-            "We are finalizing your payment. If this persists, contact support.",
-          links: {
-            actions: [
-              {
-                label: "View on Explorer",
-                href: explorerTxUrl(sig!),
-                type: "post",
-              },
-            ],
-          },
-        };
-        return withCORS(reply).send(fallback);
-      }
-    }
-
+        ],
+      },
+    });
+  }
     // ------- default metadata (no tx yet) -------
     const meta: ActionGetResponse = {
       icon: `${API_BASE}/icon.png`,

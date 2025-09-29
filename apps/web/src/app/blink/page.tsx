@@ -3,16 +3,18 @@
 import { useState } from "react";
 import { QRCodeCanvas } from "qrcode.react";
 
-const BLINK_URL = process.env.NEXT_PUBLIC_API_URL
+const ACTION_URL = process.env.NEXT_PUBLIC_API_URL
   ? `${process.env.NEXT_PUBLIC_API_URL}/api/actions/buy-pass`
-  : ""; // Empty string fallback, forces error if not set
+  : "";
+
+  const DIAL_URL = `https://dial.to/?action=solana-action:${encodeURIComponent(ACTION_URL)}`;
 
 export default function BlinkPage() {
   const [copied, setCopied] = useState(false);
 
   async function copyBlink() {
     try {
-      await navigator.clipboard.writeText(BLINK_URL);
+      await navigator.clipboard.writeText(ACTION_URL);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -73,7 +75,7 @@ export default function BlinkPage() {
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={BLINK_URL}
+                  value={DIAL_URL}
                   readOnly
                   className="flex-1 px-3 py-2 border rounded-lg bg-gray-50 font-mono text-sm"
                 />
@@ -94,7 +96,7 @@ export default function BlinkPage() {
               <label className="block text-sm font-medium mb-2">QR Code:</label>
               <div className="flex justify-center p-4 bg-white border rounded-xl">
                 <QRCodeCanvas
-                  value={BLINK_URL}
+                  value={DIAL_URL}
                   size={200}
                   level="M"
                   includeMargin={true}
@@ -104,14 +106,14 @@ export default function BlinkPage() {
 
             <div className="space-y-2">
               <button
-                onClick={() => window.open(BLINK_URL, "_blank")}
+                onClick={() => window.open(DIAL_URL, "_blank")}
                 className="w-full bg-purple-500 hover:bg-purple-600 text-white py-3 rounded-xl font-medium transition-colors"
               >
                 🔗 Test Blink
               </button>
               
               <a
-                href={`https://dial.to/?action=solana-action:${encodeURIComponent(BLINK_URL)}`}
+                href={DIAL_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block w-full bg-blue-500 hover:bg-blue-600 text-white py-3 rounded-xl font-medium text-center transition-colors"
