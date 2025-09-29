@@ -77,11 +77,13 @@ export async function payRoutes(app: FastifyInstance) {
       if (chain === "SOL") {
         // If type is 'transaction', generate serialized transaction for one-click payments
         if (type === "transaction" && account) {
+          const disableMemo = !!(body as { disableMemo?: boolean }).disableMemo;
           const intent = await gw.makePaymentIntent({
             to: skuConfig.recipient,
             amountNano: skuConfig.amountNano,
             memo: `Order-${order.id}`,
             from: account,
+            disableMemo,
           });
           // Extract transaction from the intent URI
           const url = new URL(intent.uri);
@@ -89,9 +91,16 @@ export async function payRoutes(app: FastifyInstance) {
           if (!serializedTransaction) {
             throw new Error("Failed to generate transaction");
           }
+          // Log debug info
+          console.log("/pay debug:", {
+            orderId: order.id,
+            transaction: serializedTransaction,
+            intentDebug: intent.debug,
+          });
           return reply.send({
             orderId: order.id,
             transaction: serializedTransaction,
+            debug: intent.debug,
             message: `VIP Pass purchase created! Order ID: ${order.id}`,
           });
         } else {
