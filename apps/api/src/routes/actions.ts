@@ -218,11 +218,11 @@ export async function actionsRoutes(app: FastifyInstance) {
       //   req.log.info({ base64Len: base64.length }, "POST /buy-pass out");
 
       // ❸ Return per Actions spec
-      return withActionHeaders(reply).send({
-        type: "transaction", // ← REQUIRED by some Blink clients
-        transaction: base64, // ← base64 of VersionedTransaction.serialize()
-        message: "VIP Pass created. Completing payment…",
-      });
+      return reply.send({
+  type: "transaction",                 // REQUIRED by some clients
+  transaction: base64,         // from tx.serialize()
+  message: "VIP Pass created. Completing payment…"
+});
     } catch (e: any) {
       req.log.error({ e }, "POST /buy-pass failed");
       return withCORS(reply)
