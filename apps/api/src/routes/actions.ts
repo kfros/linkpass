@@ -166,6 +166,22 @@ export async function actionsRoutes(app: FastifyInstance) {
 
   // GET /api/actions/buy-pass/:orderId/status - Check order status
   app.get("/api/actions/buy-pass/:orderId/status", async (req, reply) => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+     const sig = (req.query as any).transaction as string | undefined;
+
+      if (sig) {
+    return reply.send({
+      icon: `${apiUrl}/icon.png`,
+      title: "LinkPass - VIP Pass",
+      description: "Payment received. Your VIP Pass will arrive shortly.",
+      label: "Paid ✔",
+      links: {
+        actions: [
+          { label: "View on Explorer", href: `https://explorer.solana.com/tx/${sig}?cluster=devnet`, type: "external" },
+        ],
+      },
+    });
+  }
     try {
       const { orderId } = req.params as { orderId: string };
       const db = await getDb();
