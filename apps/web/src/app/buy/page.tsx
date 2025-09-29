@@ -261,7 +261,7 @@ export default function BuyPass() {
         {selectedChain === "SOL" && (
           <div className="text-sm text-purple-700 bg-purple-50 p-3 rounded-xl">
             <strong>Solana Blink:</strong> One-click payments! Compatible with Phantom, Backpack, and other Blink-enabled wallets.
-            Price: 0.01 SOL (~$2-3)
+            Price: 0.5 SOL (~$2-3)
           </div>
         )}
 

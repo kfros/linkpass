@@ -44,7 +44,7 @@ export async function actionsRoutes(app: FastifyInstance) {
       links: {
         actions: [
           {
-            label: "Buy for 0.01 SOL",
+            label: "Buy for 0.5 SOL",
             href: `${apiUrl}/api/actions/buy-pass`,
             type: "transaction",
           },
@@ -96,7 +96,7 @@ export async function actionsRoutes(app: FastifyInstance) {
           merchantId: 1,
           sku: "vip-pass",
           amount: 0,
-          amountNano: BigInt("10000000"), // 0.01 SOL in lamports
+          amountNano: BigInt("50000000"), // 0.5 SOL in lamports
           chain: "sol",
           status: "paying",
           toAddress: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111",
@@ -106,7 +106,7 @@ export async function actionsRoutes(app: FastifyInstance) {
 
       // Generate Solana Pay URL for QR code
       const recipient = process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111";
-      const amount = 0.01;
+      const amount = 0.5;
       const reference = order.id;
       const label = "VIP Pass";
       const message = "Buy VIP Pass";
