@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ALTER COLUMN "amount" SET DATA TYPE numeric(20, 9);
