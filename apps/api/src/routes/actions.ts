@@ -49,16 +49,16 @@ function explorerTxUrl(sig: string) {
 }
 
 const CAIP_SOLANA_MAINNET = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
-const CAIP_SOLANA_DEVNET  = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+const CAIP_SOLANA_DEVNET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
 const ACTION_VERSION = "2.4"; // keep in sync with your lib
 
 function withActionHeaders(reply: any) {
-const caip = CLUSTER === "mainnet" ? CAIP_SOLANA_MAINNET : CAIP_SOLANA_DEVNET;
+  const caip = CLUSTER === "mainnet" ? CAIP_SOLANA_MAINNET : CAIP_SOLANA_DEVNET;
   return reply
     .headers({
-      ...ACTIONS_CORS_HEADERS,       // CORS + cache headers Dialect expects
+      ...ACTIONS_CORS_HEADERS, // CORS + cache headers Dialect expects
       "x-blockchain-ids": caip, // CAIP-2 chain id
-      "x-action-version": ACTION_VERSION,      // current Actions version used in docs
+      "x-action-version": ACTION_VERSION, // current Actions version used in docs
     })
     .type("application/json");
 }
@@ -184,35 +184,39 @@ export async function actionsRoutes(app: FastifyInstance) {
       const tx = new VersionedTransaction(msg);
       const base64 = Buffer.from(tx.serialize()).toString("base64");
 
-const res: ActionPostResponse & { type: "transaction" } = {
-      type: "transaction",
-      transaction: base64,
-      message: "VIP Pass created. Completing payment…",
-    };
-    //   const sim = await connection.simulateTransaction(tx, {
-    //     replaceRecentBlockhash: true,
-    //     sigVerify: false,
-    //   });
+      const res: ActionPostResponse & { type: "transaction" } = {
+        type: "transaction",
+        transaction: base64,
+        message: "VIP Pass created. Completing payment…",
+      };
+      //   const sim = await connection.simulateTransaction(tx, {
+      //     replaceRecentBlockhash: true,
+      //     sigVerify: false,
+      //   });
 
-    //   if (sim.value.err) {
-    //     req.log.warn(
-    //       { err: sim.value.err, logs: sim.value.logs },
-    //       "preflight simulation failed"
-    //     );
-    //     return reply
-    //       .code(400)
-    //       .type("application/json")
-    //       .send({
-    //         error: "SIMULATION_FAILED",
-    //         details: sim.value.err,
-    //         logs: sim.value.logs?.slice(-10) ?? [],
-    //       });
-    // }
+      //   if (sim.value.err) {
+      //     req.log.warn(
+      //       { err: sim.value.err, logs: sim.value.logs },
+      //       "preflight simulation failed"
+      //     );
+      //     return reply
+      //       .code(400)
+      //       .type("application/json")
+      //       .send({
+      //         error: "SIMULATION_FAILED",
+      //         details: sim.value.err,
+      //         logs: sim.value.logs?.slice(-10) ?? [],
+      //       });
+      // }
 
-    //   req.log.info({ base64Len: base64.length }, "POST /buy-pass out");
+      //   req.log.info({ base64Len: base64.length }, "POST /buy-pass out");
 
       // ❸ Return per Actions spec
-       return reply.send(res);
+      return withActionHeaders(reply).send({
+        type: "transaction", // ← REQUIRED by some Blink clients
+        transaction: base64, // ← base64 of VersionedTransaction.serialize()
+        message: "VIP Pass created. Completing payment…",
+      });
     } catch (e: any) {
       req.log.error({ e }, "POST /buy-pass failed");
       return withCORS(reply)
@@ -232,23 +236,23 @@ const res: ActionPostResponse & { type: "transaction" } = {
       // 🔎 log so you can see if Dialect called back with the signature
       req.log.info({ sig }, "Dialect success callback");
       const success: ActionGetResponse = {
-      icon: `${apiUrl}/icon.png`,
-      title: "LinkPass - VIP Pass",
-      label: "Paid ✔",
-      description: "Payment received. Your VIP Pass will arrive shortly.",
-      links: {
-        actions: [
-          {
-            label: "View on Explorer",
-            href:
-              `https://explorer.solana.com/tx/${sig}` +
-              (cluster === "mainnet" ? "" : `?cluster=${cluster}`),
-            type: "post",
-          },
-        ],
-      },
-    };
-       return withActionHeaders(reply).send(success);
+        icon: `${apiUrl}/public/icon.png`,
+        title: "LinkPass - VIP Pass",
+        label: "Paid ✔",
+        description: "Payment received. Your VIP Pass will arrive shortly.",
+        links: {
+          actions: [
+            {
+              label: "View on Explorer",
+              href:
+                `https://explorer.solana.com/tx/${sig}` +
+                (cluster === "mainnet" ? "" : `?cluster=${cluster}`),
+              type: "post",
+            },
+          ],
+        },
+      };
+      return withActionHeaders(reply).send(success);
     }
     // ------- default metadata (no tx yet) -------
     const meta: ActionGetResponse = {
