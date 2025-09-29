@@ -22,7 +22,7 @@ export async function payRoutes(app: FastifyInstance) {
     const configs = {
       "vip-pass": {
         TON: { amountNano: "20000000", recipient: process.env.TON_RECIPIENT_ADDRESS || "0QBv2t8tqBB2KADpupdZ5nGT-CQm89eHHQZboclO1ealFTZL" },
-        SOL: { amountNano: "10000000", recipient: process.env.SOLANA_RECIPIENT_ADDRESS || "11111111111111111111111111111111" }, // 0.01 SOL in lamports
+        SOL: { amountNano: "10000000", recipient: process.env.SOLANA_RECIPIENT_ADDRESS || "6joUci1Bv3i2ymnxSyvL7HU6QBEEDrUHS8TMpqNTx2mG" }, // 0.01 SOL in lamports
       },
     };
     

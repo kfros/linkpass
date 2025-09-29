@@ -236,7 +236,7 @@ export default function BuyPass() {
             <div className="mt-2 flex gap-2">
               <button
                 className="px-3 py-1 rounded bg-neutral-200 hover:bg-neutral-300"
-                onClick={() => navigator.clipboard.writeText(link)}
+                onClick={() => navigator.clipboard.writeText(selectedChain === "SOL" ? `${API}/api/actions/buy-pass` : link)}
               >
                 Copy link
               </button>
