@@ -49,7 +49,7 @@ function explorerTxUrl(sig: string) {
 }
 
 const CAIP_SOLANA_MAINNET = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
-const CAIP_SOLANA_DEVNET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
+const CAIP_SOLANA_DEVNET = "solana:4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z";
 const ACTION_VERSION = "2.4"; // keep in sync with your lib
 
 function withActionHeaders(reply: any) {
@@ -67,7 +67,7 @@ function withActionHeaders(reply: any) {
       "X-Action-Version, X-Blockchain-Ids"
     )
     .header("X-Action-Version", "2.4")
-    .header("X-Blockchain-Ids", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1") // devnet
+    .header("X-Blockchain-Ids", "solana:4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z") // devnet
     .header("Cache-Control", "no-store")
     .type("application/json");
 }
@@ -153,7 +153,7 @@ export async function actionsRoutes(app: FastifyInstance) {
       const connection = new Connection(DEVNET_RPC, "confirmed");
       const computeIxs = [
         ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100_000_000 }),
+        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
       ];
       const transferIx = SystemProgram.transfer({
         fromPubkey: payer,
