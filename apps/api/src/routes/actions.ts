@@ -37,7 +37,7 @@ const MEMO_PROGRAM_ID = new PublicKey(
   "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 );
 const LAMPORTS = 1_000_000_000;
-const PRICE_SOL = 0.01;
+const PRICE_SOL = 0.25;
 const PRICE_LAMPORTS = Math.round(PRICE_SOL * LAMPORTS);
 
 type NewOrder = InferInsertModel<typeof orders>;
@@ -153,7 +153,7 @@ export async function actionsRoutes(app: FastifyInstance) {
       const connection = new Connection(DEVNET_RPC, "confirmed");
       const computeIxs = [
         ComputeBudgetProgram.setComputeUnitLimit({ units: 200_000 }),
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 200_000 }),
+        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50_000 }),
       ];
       const transferIx = SystemProgram.transfer({
         fromPubkey: payer,
