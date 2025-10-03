@@ -43,6 +43,34 @@
       "when": 1759155577122,
       "tag": "0005_free_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1759394869063,
+      "tag": "0006_glorious_supernaut",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1759395744424,
+      "tag": "0007_pretty_ken_ellis",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1759400168463,
+      "tag": "0008_clever_surge",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1759500529941,
+      "tag": "0009_melodic_brood",
+      "breakpoints": true
     }
   ]
 }

@@ -11,7 +11,7 @@
 !.yarn/versions
 
 # testing
-/coverage
+/coverageW
 
 # next.js
 /.next/
@@ -45,3 +45,14 @@ apps/*/.env
 !apps/*/.env.example
 apps/api/node_modules/*
 apps/web/node_modules/*
+Epics and user stories.txt
+Plan.xlsx
+*.docx
+*.tmp
+access-refresh-token-guide.md
+advanced-token-security-guide.md
+auth-implementation-guide.md
+chat-context-2025-10-02.md
+enhanced-password-security-guide.md
+.github/copilot-instructions.md
+.specstory

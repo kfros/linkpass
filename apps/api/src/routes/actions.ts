@@ -1,10 +1,6 @@
 import {
   FastifyInstance,
   FastifyReply,
-  FastifySchema,
-  FastifyTypeProviderDefault,
-  RawServerDefault,
-  RouteGenericInterface,
 } from "fastify";
 import {
   Connection,
@@ -16,21 +12,15 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import {
-  ACTIONS_CORS_HEADERS,
-  BLOCKCHAIN_IDS,
   type ActionGetResponse,
   type ActionPostRequest,
-  type ActionPostResponse,
 } from "@solana/actions";
 import { getDb } from "../db/client";
 import { orders } from "../db/schema.js";
 import { eq, InferInsertModel } from "drizzle-orm";
-import { getGateway } from "../chain";
-import { IncomingMessage, ServerResponse } from "http";
 
 const DEVNET_RPC =
   process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
-const CLUSTER = (process.env.SOLANA_CLUSTER || "devnet").toLowerCase(); // "devnet" | "mainnet" | "testnet"
 const RECIPIENT = process.env.SOLANA_RECIPIENT_ADDRESS || ""; // devnet pubkey
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || ""; // e.g. https://linkpass-api.onrender.com
 const MEMO_PROGRAM_ID = new PublicKey(
@@ -42,18 +32,7 @@ const PRICE_LAMPORTS = Math.round(PRICE_SOL * LAMPORTS);
 
 type NewOrder = InferInsertModel<typeof orders>;
 
-function explorerTxUrl(sig: string) {
-  return `https://explorer.solana.com/tx/${sig}${
-    CLUSTER === "mainnet" ? "" : `?cluster=${CLUSTER}`
-  }`;
-}
-
-const CAIP_SOLANA_MAINNET = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
-const CAIP_SOLANA_DEVNET = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1";
-const ACTION_VERSION = "2.4"; // keep in sync with your lib
-
-function withActionHeaders(reply: any) {
-  const caip = CLUSTER === "mainnet" ? CAIP_SOLANA_MAINNET : CAIP_SOLANA_DEVNET;
+function withActionHeaders(reply: FastifyReply) {
   return reply
     .header("Access-Control-Allow-Origin", "*")
     .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
@@ -91,7 +70,7 @@ function withActionHeaders(reply: any) {
 // type ActionPostRequest = { account: string };
 // type ActionPostResponse = { transaction: string; message?: string };
 
-function withCORS(reply: any) {
+function withCORS(reply: FastifyReply) {
   return reply
     .header("Access-Control-Allow-Origin", "*")
     .header("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
@@ -200,11 +179,6 @@ export async function actionsRoutes(app: FastifyInstance) {
       });
       const base64 = Buffer.from(tx.serialize()).toString("base64");
 
-      const res: ActionPostResponse & { type: "transaction" } = {
-        type: "transaction",
-        transaction: base64,
-        message: "VIP Pass created. Completing payment…",
-      };
       if (sim.value.err) {
         req.log.warn(
           { err: sim.value.err, logs: sim.value.logs?.slice(-10) },
@@ -225,11 +199,11 @@ export async function actionsRoutes(app: FastifyInstance) {
         transaction: base64, // from tx.serialize()
         message: "VIP Pass created. Completing payment…",
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       req.log.error({ e }, "POST /buy-pass failed");
       return withCORS(reply)
         .code(500)
-        .send({ error: "Failed to create transaction", details: e?.message });
+        .send({ error: "Failed to create transaction", details: e instanceof Error ? e.message : String(e) });
     }
   });
 
@@ -237,7 +211,12 @@ export async function actionsRoutes(app: FastifyInstance) {
   app.get("/api/actions/buy-pass", async (req, reply) => {
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
     const cluster = (process.env.SOLANA_CLUSTER ?? "devnet").toLowerCase();
-    const sig = (req.query as any)?.transaction as string | undefined;
+
+    interface BuyPassQuery {
+      transaction?: string;
+    }
+    const query = req.query as BuyPassQuery;
+    const sig = query.transaction;
     req.log.info({ url: req.url, q: req.query }, "GET /buy-pass");
 
     if (sig) {

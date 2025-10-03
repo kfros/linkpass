@@ -26,11 +26,18 @@ export type Order = { id: number; sku: string; amount: number; status: string };
 
 export const api = {
   merchants: {
-    list: () => fetch(`${API}/merchants`).then((res) => json<Merchant[]>(res)),
+    list: () => fetch(`${API}/merchants`, { 
+      credentials: "include",
+      headers: defaultHeaders 
+    }).then((res) => json<Merchant[]>(res)),
     create: (name: string): Promise<Merchant> =>
       fetch(`${API}/merchants`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { 
+          "Content-Type": "application/json",
+          ...defaultHeaders 
+        },
         body: JSON.stringify({ name }),
       }).then((res) => json<Merchant>(res)),
   },
@@ -38,24 +45,39 @@ export const api = {
     create: (merchantId: number, sku: string, title: string): Promise<Pass> =>
       fetch(`${API}/passes`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { 
+          "Content-Type": "application/json",
+          ...defaultHeaders 
+        },
         body: JSON.stringify({ merchantId, sku, title }),
       }).then((res) => json<Pass>(res)),
     get: (sku: string) =>
-      fetch(`${API}/passes/${sku}`).then((res) => json<Pass>(res)),
+      fetch(`${API}/passes/${sku}`, { 
+        credentials: "include",
+        headers: defaultHeaders 
+      }).then((res) => json<Pass>(res)),
   },
   orders: {
     create: (merchantId: number, sku: string, amount: number): Promise<Order> =>
       fetch(`${API}/orders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { 
+          "Content-Type": "application/json",
+          ...defaultHeaders 
+        },
         body: JSON.stringify({ merchantId, sku, amount }),
       }).then((res) => json<Order>(res)),
 
     updateTx: (id: number, chain: "sol" | "ton", tx: string): Promise<Order> =>
       fetch(`${API}/orders/${id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { 
+          "Content-Type": "application/json",
+          ...defaultHeaders 
+        },
         body: JSON.stringify({ chain, tx }),
       }).then((res) => json<Order>(res)),
   },
@@ -63,7 +85,11 @@ export const api = {
     pay: (orderId: number) =>
       fetch(`${API}/orders/${orderId}/solana`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: { 
+          "Content-Type": "application/json",
+          ...defaultHeaders 
+        },
       }).then((res) => json<Order>(res)),
   },
 };
@@ -92,12 +118,24 @@ export type AdminPass = {
 
 export const adminApi = {
   orders: (limit = 50, offset = 0) =>
-    fetch(`${API}/admin/orders?limit=${limit}&offset=${offset}`, { cache: "no-store", headers: defaultHeaders })
+    fetch(`${API}/admin/orders?limit=${limit}&offset=${offset}`, { 
+      cache: "no-store", 
+      credentials: "include",
+      headers: defaultHeaders 
+    })
       .then(res => json<AdminOrder[]>(res)),
   passes: () =>
-    fetch(`${API}/admin/passes`, { cache: "no-store", headers: defaultHeaders })
+    fetch(`${API}/admin/passes`, { 
+      cache: "no-store", 
+      credentials: "include",
+      headers: defaultHeaders 
+    })
       .then(res => json<AdminPass[]>(res)),
   verify: (sku: string, tx: string) =>
-    fetch(`${API}/admin/verify?sku=${encodeURIComponent(sku)}&tx=${encodeURIComponent(tx)}`, { cache: "no-store", headers: defaultHeaders })
+    fetch(`${API}/admin/verify?sku=${encodeURIComponent(sku)}&tx=${encodeURIComponent(tx)}`, { 
+      cache: "no-store", 
+      credentials: "include",
+      headers: defaultHeaders 
+    })
       .then(res => json<{ valid: boolean; reason?: string; orderId?: number; chain?: string; receiptUrl?: string | null }>(res)),
 };

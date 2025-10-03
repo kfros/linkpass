@@ -4,7 +4,7 @@ import { orders } from "../db/schema.js";
 import { eq, InferInsertModel } from "drizzle-orm";
 import { z } from "zod";
 import { getGateway } from "../chain";
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import type { Chain } from "../chain/types";
 
 const PayBody = z.object({
@@ -49,15 +49,18 @@ export async function payRoutes(app: FastifyInstance) {
     if (!parsedBody.success) {
       return reply.status(400).send({ error: "Invalid request body" });
     }
+interface PayRequestBody {
+  account?: string;
+  type?: string;
+  [key: string]: unknown;
+}
+
     const {
       sku = "vip-pass",
-      merchantId = 1,
-      tgUserId,
-      tgUsername,
       chain = "TON",
     } = parsedBody.data;
     // Accept 'account' and 'type' from req.body for compatibility
-    const body: any = req.body;
+    const body = req.body as PayRequestBody;
     const account = body.account;
     const type = body.type;
 

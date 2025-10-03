@@ -10,15 +10,18 @@ export default function Home() {
         <p className="text-muted-foreground width-full">
           Cross-chain access passes with Telegram Mini-App & Solana Blinks.
         </p>
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-3 flex-wrap">
           <Button asChild>
-            <Link href="/telegram">Open Telegram Mini-App</Link>
+            <Link href="/auth">Sign In / Register</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/telegram">Telegram Mini-App</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link href="/blink">Try Blink Demo</Link>
           </Button>
           <Button variant="ghost" asChild>
-            <Link href="/admin">Go to Admin Panel</Link>
+            <Link href="/admin">Admin Panel</Link>
           </Button>
           <Button variant="outline" asChild>
             <Link

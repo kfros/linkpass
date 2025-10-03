@@ -1,0 +1,2 @@
+ALTER TABLE "merchant_users" ADD COLUMN IF NOT EXISTS "password_hash" text;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "ux_merchant_users_email" ON "merchant_users" USING btree ("email");

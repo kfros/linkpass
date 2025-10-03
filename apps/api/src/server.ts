@@ -1,5 +1,6 @@
 import fastify from "fastify";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 // import { ZodTypeProvider } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { getDb } from "./db/client";
@@ -16,6 +17,8 @@ import * as crypto from "crypto";
 
 import { payRoutes } from "./routes/pay";
 import { actionsRoutes } from "./routes/actions";
+import { authRoutes } from "./routes/auth";
+import { oauthRoutes } from "./routes/oauth";
 
 type NewOrder = InferInsertModel<typeof orders>;
 
@@ -45,6 +48,13 @@ const UpdateOrderTx = z.object({
 
 export async function buildServer() {
   const app = fastify({ logger: true });
+  
+  // Register cookie plugin
+  await app.register(cookie, {
+    secret: process.env.COOKIE_SECRET || "your-cookie-secret",
+    parseOptions: {}
+  });
+  
   await app.register(cors, {
     origin: (origin, cb) => {
       // Allow requests with no origin (like curl/Postman)
@@ -54,6 +64,7 @@ export async function buildServer() {
         "https://linkpass-api.onrender.com",
         "https://localhost:4000",
         "http://localhost:3000",
+        "http://localhost:4000",
       ];
       cb(null, allowed.includes(origin));
     },
@@ -68,11 +79,13 @@ export async function buildServer() {
     maxAge: 86400,
     preflight: true,
     strictPreflight: false,
-    credentials: false,
+    credentials: true,
   });
 
   await app.register(payRoutes);
   await app.register(actionsRoutes);
+  await app.register(authRoutes);
+  await app.register(oauthRoutes);
 
   // Simple health check
 
@@ -291,7 +304,20 @@ export async function buildServer() {
       .orderBy(sql`${tOrders.id} DESC`)
       .limit(take)
       .offset(skip);
-    return rows;
+
+    // Convert all BigInt fields to strings for JSON serialization
+    const safeRows = rows.map((row: Record<string, unknown>) => {
+      const safeRow: Record<string, unknown> = {};
+      for (const key in row) {
+        if (typeof row[key] === 'bigint') {
+          safeRow[key] = (row[key] as bigint).toString();
+        } else {
+          safeRow[key] = row[key];
+        }
+      }
+      return safeRow;
+    });
+    return safeRows;
   });
 
   // ---------- ADMIN: LIST PASSES ----------

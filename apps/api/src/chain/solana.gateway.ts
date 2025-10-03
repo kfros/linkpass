@@ -73,7 +73,7 @@ const base64Transaction = Buffer.from(
     memo,
     debug: { base64Transaction },
     // (optionally also expose base64Transaction top-level if you prefer)
-  } as any;
+  } as PaymentIntent;
 }
 
 private createBlinkUrl(_serializedTx?: string, memo?: string): string {

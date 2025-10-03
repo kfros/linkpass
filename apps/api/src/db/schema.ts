@@ -1,3 +1,4 @@
+
 import {
 pgTable,
   serial,
@@ -96,6 +97,21 @@ export const orders = pgTable(
   (t) => [index("idx_orders_sku").on(t.sku), index("idx_orders_tx").on(t.tx)]
 );
 
+// Revoked access tokens table for persistent blacklisting
+export const revokedAccessTokens = pgTable(
+  "revoked_access_tokens",
+  {
+    id: serial("id").primaryKey(),
+    tokenHash: text("token_hash").notNull(), // hashed access token
+    revokedAt: timestamp("revoked_at", { withTimezone: true }).defaultNow().notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index("ix_revoked_access_tokens_hash").on(t.tokenHash),
+    index("ix_revoked_access_tokens_expiry").on(t.expiresAt),
+  ]
+);
+
 // 1) Multi-merchant users (Stripe-like)
 export const merchantUsers = pgTable(
   "merchant_users",
@@ -103,11 +119,71 @@ export const merchantUsers = pgTable(
     id: serial("id").primaryKey(),
     merchantId: integer("merchant_id").notNull().references(() => merchants.id, { onDelete: "cascade" }),
     email: text("email").notNull(),
+    passwordHash: text("password_hash"), // nullable for OAuth-only users
     role: text("role").notNull().default("admin"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
     uniqueIndex("ux_merchant_users_merchant_email").on(t.merchantId, t.email),
+    uniqueIndex("ux_merchant_users_email").on(t.email), // unique email across all merchants
+  ]
+);
+
+// Refresh tokens table for secure token management
+export const refreshTokens = pgTable(
+  "refresh_tokens",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => merchantUsers.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(), // hashed refresh token
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("ix_refresh_tokens_user").on(t.userId),
+    index("ix_refresh_tokens_hash").on(t.tokenHash),
+  ]
+);
+
+// Active sessions tracking for security monitoring
+export const activeSessions = pgTable(
+  "active_sessions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => merchantUsers.id, { onDelete: "cascade" }),
+    sessionId: text("session_id").notNull().unique(), // unique session identifier
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    lastActivity: timestamp("last_activity", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("ix_active_sessions_user").on(t.userId),
+    index("ix_active_sessions_session").on(t.sessionId),
+    index("ix_active_sessions_activity").on(t.lastActivity),
+  ]
+);
+
+// OAuth providers table for linking external accounts
+export const oauthProviders = pgTable(
+  "oauth_providers",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").notNull().references(() => merchantUsers.id, { onDelete: "cascade" }),
+    provider: varchar("provider", { length: 50 }).notNull(), // 'google', 'github', etc.
+    providerId: text("provider_id").notNull(), // OAuth provider's user ID
+    email: text("email"), // Email from OAuth provider
+    displayName: text("display_name"), // Display name from OAuth provider
+    profileData: jsonb("profile_data"), // Full profile data from OAuth provider
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("ux_oauth_providers_provider_id").on(t.provider, t.providerId),
+    index("ix_oauth_providers_user").on(t.userId),
+    index("ix_oauth_providers_email").on(t.email),
   ]
 );
 
